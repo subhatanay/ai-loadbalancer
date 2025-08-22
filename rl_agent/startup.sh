@@ -1,0 +1,7 @@
+export RL_AGENT_LOADBALANCER_HOST="localhost"
+export RL_AGENT_LOADBALANCER_PORT="8080"
+export RL_AGENT_PROMETHEUS_HOST="localhost"
+export RL_AGENT_PROMETHEUS_PORT="9090"
+export RL_AGENT_LOG_LEVEL="INFO"
+
+python main.py

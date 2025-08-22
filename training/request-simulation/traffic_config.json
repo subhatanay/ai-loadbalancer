@@ -1,0 +1,10 @@
+{
+  "load_balancer_url": "http://localhost:8080",
+  "duration_minutes": 60,
+  "base_users": 20,
+  "max_users": 150,
+  "ramp_up_minutes": 10,
+  "request_delay_range": [0.5, 2.5],
+  "burst_probability": 0.15,
+  "burst_multiplier": 2.5
+}

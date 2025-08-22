@@ -1,0 +1,377 @@
+{
+  "rl_training_scenarios": {
+    "description": "Comprehensive RL Training Configuration with Reduced Cooldown Periods (5-6 minutes)",
+    "version": "2.1",
+    "created_for": "Offline RL Training Data Generation with Background Traffic",
+    
+    "base_config": {
+      "base_url": "http://localhost:8080/proxy",
+      "request_timeout": 12,
+      "retry_attempts": 2,
+      "retry_delay": 0.8,
+      "session_duration_minutes": 15,
+      "think_time_min": 0.3,
+      "think_time_max": 2.5,
+      "connection_pool_size": 100,
+      "max_retries_per_session": 3
+    },
+
+    "training_scenarios": {
+      "comprehensive_rl_training": {
+        "description": "Comprehensive scenario with 5-6 minute cooldowns and background traffic",
+        "total_users": 500,
+        "test_duration_minutes": 60,
+        "max_concurrent_users": 120,
+        "ramp_up_time_seconds": 300,
+        "data_collection_interval_seconds": 5,
+        
+        "traffic_patterns": [
+          {
+            "name": "morning_peak_rush",
+            "start_minute": 0,
+            "duration_minutes": 8,
+            "intensity": "very_high",
+            "concurrent_users": 80,
+            "user_behavior_distribution": {
+              "quick_browsers": 0.4,
+              "careful_shoppers": 0.25,
+              "bulk_buyers": 0.15,
+              "impulse_buyers": 0.2
+            },
+            "scenario_weights": {
+              "browse_weight": 50,
+              "search_weight": 20,
+              "cart_weight": 20,
+              "order_weight": 8,
+              "profile_weight": 2
+            },
+            "service_load_characteristics": {
+              "user_service_load": "high",
+              "inventory_service_load": "very_high",
+              "cart_service_load": "medium",
+              "order_service_load": "low",
+              "payment_service_load": "low"
+            }
+          },
+          {
+            "name": "steady_browsing_period",
+            "start_minute": 14,
+            "duration_minutes": 10,
+            "intensity": "medium",
+            "concurrent_users": 45,
+            "user_behavior_distribution": {
+              "quick_browsers": 0.6,
+              "careful_shoppers": 0.3,
+              "bulk_buyers": 0.05,
+              "impulse_buyers": 0.05
+            },
+            "scenario_weights": {
+              "browse_weight": 60,
+              "search_weight": 25,
+              "cart_weight": 10,
+              "order_weight": 3,
+              "profile_weight": 2
+            },
+            "service_load_characteristics": {
+              "user_service_load": "medium",
+              "inventory_service_load": "high",
+              "cart_service_load": "low",
+              "order_service_load": "very_low",
+              "payment_service_load": "very_low"
+            }
+          },
+          {
+            "name": "lunch_hour_shopping",
+            "start_minute": 30,
+            "duration_minutes": 8,
+            "intensity": "high",
+            "concurrent_users": 70,
+            "user_behavior_distribution": {
+              "quick_browsers": 0.2,
+              "careful_shoppers": 0.15,
+              "bulk_buyers": 0.05,
+              "impulse_buyers": 0.35,
+              "mobile_first_users": 0.2,
+              "subscription_buyers": 0.05
+            },
+            "scenario_weights": {
+              "browse_weight": 35,
+              "search_weight": 15,
+              "cart_weight": 35,
+              "order_weight": 12,
+              "profile_weight": 3
+            },
+            "service_load_characteristics": {
+              "user_service_load": "high",
+              "inventory_service_load": "high",
+              "cart_service_load": "very_high",
+              "order_service_load": "medium",
+              "payment_service_load": "medium"
+            }
+          },
+          {
+            "name": "afternoon_steady_state",
+            "start_minute": 44,
+            "duration_minutes": 10,
+            "intensity": "medium_low",
+            "concurrent_users": 35,
+            "user_behavior_distribution": {
+              "quick_browsers": 0.45,
+              "careful_shoppers": 0.4,
+              "bulk_buyers": 0.1,
+              "impulse_buyers": 0.05
+            },
+            "scenario_weights": {
+              "browse_weight": 55,
+              "search_weight": 20,
+              "cart_weight": 15,
+              "order_weight": 7,
+              "profile_weight": 3
+            },
+            "service_load_characteristics": {
+              "user_service_load": "medium",
+              "inventory_service_load": "medium",
+              "cart_service_load": "low",
+              "order_service_load": "low",
+              "payment_service_load": "low"
+            }
+          }
+        ]
+      }
+    },
+
+    "user_behavior_profiles": {
+      "quick_browsers": {
+        "session_duration_minutes": [2, 8],
+        "pages_per_session": [3, 12],
+        "conversion_rate": 0.05,
+        "cart_abandonment_rate": 0.85,
+        "search_probability": 0.7,
+        "category_browse_probability": 0.3,
+        "product_detail_view_probability": 0.6,
+        "add_to_cart_probability": 0.15,
+        "checkout_probability": 0.1,
+        "mobile_usage_probability": 0.8,
+        "social_media_referral_probability": 0.4,
+        "price_comparison_probability": 0.3
+      },
+      "careful_shoppers": {
+        "session_duration_minutes": [8, 25],
+        "pages_per_session": [10, 35],
+        "conversion_rate": 0.25,
+        "cart_abandonment_rate": 0.45,
+        "search_probability": 0.8,
+        "category_browse_probability": 0.9,
+        "product_detail_view_probability": 0.95,
+        "add_to_cart_probability": 0.4,
+        "checkout_probability": 0.6,
+        "mobile_usage_probability": 0.6,
+        "social_media_referral_probability": 0.2,
+        "price_comparison_probability": 0.8,
+        "review_reading_probability": 0.9,
+        "wishlist_usage_probability": 0.6
+      },
+      "bulk_buyers": {
+        "session_duration_minutes": [15, 45],
+        "pages_per_session": [20, 60],
+        "conversion_rate": 0.7,
+        "cart_abandonment_rate": 0.15,
+        "search_probability": 0.9,
+        "category_browse_probability": 0.7,
+        "product_detail_view_probability": 0.8,
+        "add_to_cart_probability": 0.8,
+        "checkout_probability": 0.85,
+        "mobile_usage_probability": 0.4,
+        "social_media_referral_probability": 0.1,
+        "price_comparison_probability": 0.9,
+        "bulk_discount_seeking_probability": 0.9
+      },
+      "impulse_buyers": {
+        "session_duration_minutes": [3, 15],
+        "pages_per_session": [5, 20],
+        "conversion_rate": 0.4,
+        "cart_abandonment_rate": 0.3,
+        "search_probability": 0.4,
+        "category_browse_probability": 0.8,
+        "product_detail_view_probability": 0.7,
+        "add_to_cart_probability": 0.6,
+        "checkout_probability": 0.7,
+        "mobile_usage_probability": 0.9,
+        "social_media_referral_probability": 0.7,
+        "price_comparison_probability": 0.2,
+        "flash_sale_attraction_probability": 0.9
+      },
+      "mobile_first_users": {
+        "session_duration_minutes": [1, 6],
+        "pages_per_session": [2, 8],
+        "conversion_rate": 0.15,
+        "cart_abandonment_rate": 0.7,
+        "search_probability": 0.6,
+        "category_browse_probability": 0.4,
+        "product_detail_view_probability": 0.5,
+        "add_to_cart_probability": 0.25,
+        "checkout_probability": 0.3,
+        "mobile_usage_probability": 1.0,
+        "social_media_referral_probability": 0.8,
+        "one_click_purchase_probability": 0.6
+      },
+      "subscription_buyers": {
+        "session_duration_minutes": [5, 12],
+        "pages_per_session": [4, 15],
+        "conversion_rate": 0.6,
+        "cart_abandonment_rate": 0.2,
+        "search_probability": 0.5,
+        "category_browse_probability": 0.3,
+        "product_detail_view_probability": 0.8,
+        "add_to_cart_probability": 0.7,
+        "checkout_probability": 0.8,
+        "mobile_usage_probability": 0.7,
+        "subscription_preference_probability": 0.9,
+        "loyalty_program_usage_probability": 0.8
+      }
+    },
+
+    "rl_training_data_collection": {
+      "metrics_to_collect": [
+        "response_time_per_service",
+        "error_rate_per_service",
+        "concurrent_requests_per_service",
+        "cpu_utilization_per_service",
+        "memory_usage_per_service",
+        "queue_length_per_service",
+        "throughput_per_service",
+        "success_rate_per_service"
+      ],
+      "state_features": [
+        "current_load_distribution",
+        "historical_response_times",
+        "error_rates_last_5_minutes",
+        "service_health_scores",
+        "queue_depths",
+        "resource_utilization",
+        "time_of_day",
+        "traffic_pattern_type"
+      ],
+      "actions": [
+        "route_to_least_loaded",
+        "route_to_fastest_response",
+        "route_round_robin",
+        "route_weighted_random",
+        "route_based_on_service_type",
+        "route_with_circuit_breaker",
+        "route_with_retry_logic"
+      ],
+      "rewards": [
+        "response_time_improvement",
+        "error_rate_reduction",
+        "throughput_increase",
+        "resource_efficiency",
+        "user_satisfaction_score"
+      ],
+      "collection_frequency_seconds": 2,
+      "data_aggregation_window_seconds": 10
+    },
+
+    "enhanced_test_products": [
+      {
+        "sku": "LAPTOP-001",
+        "name": "Gaming Laptop Pro 15",
+        "category": "Electronics",
+        "price": 1299.99,
+        "image": "https://example.com/laptop-pro.jpg",
+        "popularity_score": 0.9,
+        "inventory_complexity": "high"
+      },
+      {
+        "sku": "WATCH-001",
+        "name": "Smart Watch Fitness",
+        "category": "Wearables",
+        "price": 299.99,
+        "image": "https://example.com/smartwatch.jpg",
+        "popularity_score": 0.8,
+        "inventory_complexity": "medium"
+      },
+      {
+        "sku": "TABLET-001",
+        "name": "Tablet Pro 12",
+        "category": "Electronics",
+        "price": 799.99,
+        "image": "https://example.com/tablet-pro.jpg",
+        "popularity_score": 0.7,
+        "inventory_complexity": "medium"
+      },
+      {
+        "sku": "PHONE-001",
+        "name": "Smartphone Ultra",
+        "category": "Electronics",
+        "price": 999.99,
+        "image": "https://example.com/smartphone.jpg",
+        "popularity_score": 0.95,
+        "inventory_complexity": "high"
+      },
+      {
+        "sku": "HEADPHONES-001",
+        "name": "Wireless Headphones Pro",
+        "category": "Audio",
+        "price": 199.99,
+        "image": "https://example.com/headphones.jpg",
+        "popularity_score": 0.6,
+        "inventory_complexity": "low"
+      },
+      {
+        "sku": "CAMERA-001",
+        "name": "Digital Camera 4K",
+        "category": "Photography",
+        "price": 1599.99,
+        "image": "https://example.com/camera.jpg",
+        "popularity_score": 0.4,
+        "inventory_complexity": "high"
+      }
+    ],
+
+    "realistic_shipping_addresses": [
+      {"street": "123 Main St", "city": "New York", "state": "NY", "zipCode": "10001", "country": "US", "phone": "+15551234567"},
+      {"street": "456 Oak Ave", "city": "Los Angeles", "state": "CA", "zipCode": "90210", "country": "US", "phone": "+15551234568"},
+      {"street": "789 Pine Rd", "city": "Chicago", "state": "IL", "zipCode": "60601", "country": "US", "phone": "+15551234569"},
+      {"street": "321 Elm St", "city": "Houston", "state": "TX", "zipCode": "77001", "country": "US", "phone": "+15551234570"},
+      {"street": "654 Maple Dr", "city": "Phoenix", "state": "AZ", "zipCode": "85001", "country": "US", "phone": "+15551234571"},
+      {"street": "987 Cedar Ln", "city": "Philadelphia", "state": "PA", "zipCode": "19101", "country": "US", "phone": "+15551234572"},
+      {"street": "147 Birch Ct", "city": "San Antonio", "state": "TX", "zipCode": "78201", "country": "US", "phone": "+15551234573"},
+      {"street": "258 Walnut Way", "city": "San Diego", "state": "CA", "zipCode": "92101", "country": "US", "phone": "+15551234574"}
+    ],
+
+    "load_balancer_routing_strategies": {
+      "round_robin": {
+        "description": "Distribute requests evenly across all healthy instances",
+        "parameters": {}
+      },
+      "least_connections": {
+        "description": "Route to instance with fewest active connections",
+        "parameters": {
+          "connection_weight": 1.0
+        }
+      },
+      "weighted_response_time": {
+        "description": "Route based on historical response times",
+        "parameters": {
+          "response_time_weight": 0.7,
+          "error_rate_weight": 0.3
+        }
+      },
+      "resource_aware": {
+        "description": "Route based on CPU and memory utilization",
+        "parameters": {
+          "cpu_weight": 0.6,
+          "memory_weight": 0.4
+        }
+      },
+      "adaptive_learning": {
+        "description": "ML-based routing using historical performance",
+        "parameters": {
+          "learning_rate": 0.01,
+          "exploration_rate": 0.1
+        }
+      }
+    }
+  }
+}

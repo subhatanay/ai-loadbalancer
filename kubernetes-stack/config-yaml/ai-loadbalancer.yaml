@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-loadbalancer
+  namespace: ai-loadbalancer
+  labels:
+    app: ai-loadbalancer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-loadbalancer
+  template:
+    metadata:
+      labels:
+        app: ai-loadbalancer
+    spec:
+      containers:
+      - name: ai-loadbalancer
+        image: load-balancer:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "docker"
+        - name: SERVICE_HOST
+          value: "ai-loadbalancer"
+        - name: REDIS_HOST
+          value: "redis.ai-loadbalancer.svc.cluster.local"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: RL_COLLECTOR_URL
+          value: "http://rl-experience-collector.ai-loadbalancer.svc.cluster.local:8081"
+        - name: RL_API_URL
+          value: "http://localhost:8088"
+        - name: USER_SERVICE_URL
+          value: "http://user-service.ai-loadbalancer.svc.cluster.local:8081"
+        - name: CART_SERVICE_URL
+          value: "http://cart-service.ai-loadbalancer.svc.cluster.local:8082"
+        - name: ORDER_SERVICE_URL
+          value: "http://order-service.ai-loadbalancer.svc.cluster.local:8083"
+        - name: INVENTORY_SERVICE_URL
+          value: "http://inventory-service.ai-loadbalancer.svc.cluster.local:8084"
+        - name: PAYMENT_SERVICE_URL
+          value: "http://payment-service.ai-loadbalancer.svc.cluster.local:8085"
+        - name: NOTIFICATION_SERVICE_URL
+          value: "http://notification-service.ai-loadbalancer.svc.cluster.local:8086"
+        - name: SERVER_PORT
+          value: "8080"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      - name: rl-agent
+        image: subhajgh/ai-loadbalancer-rl-agent:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8088
+        env:
+        - name: RL_AGENT_PROMETHEUS_HOST
+          value: "prometheus-service.ai-loadbalancer.svc.cluster.local"
+        - name: RL_AGENT_PROMETHEUS_PORT
+          value: "9090"
+        - name: RL_AGENT_LOADBALANCER_HOST
+          value: "localhost"
+        - name: RL_AGENT_LOADBALANCER_PORT
+          value: "8080"
+        - name: RL_AGENT_LOG_LEVEL
+          value: "INFO"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8088
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8088
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-loadbalancer-service
+  namespace: ai-loadbalancer
+  labels:
+    app: ai-loadbalancer
+spec:
+  type: ClusterIP
+  ports:
+  - name: loadbalancer
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: rl-agent
+    port: 8088
+    targetPort: 8088
+    protocol: TCP
+  selector:
+    app: ai-loadbalancer

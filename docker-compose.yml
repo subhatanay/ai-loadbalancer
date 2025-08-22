@@ -1,0 +1,453 @@
+version: '3.8'
+
+networks:
+  ai-loadbalancer-network:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  redis_data:
+  postgres_data:
+  zookeeper_data:
+  kafka_data:
+  mailhog_data:
+
+services:
+  # =============================================================================
+  # INFRASTRUCTURE SERVICES
+  # =============================================================================
+  
+  # PostgreSQL Database - Shared by multiple services
+  postgres:
+    image: postgres:14-alpine
+    container_name: ecommerce-postgres
+    environment:
+      POSTGRES_DB: ecommerce
+      POSTGRES_USER: ecommerce_user
+      POSTGRES_PASSWORD: ecommerce_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ecommerce_user -d ecommerce"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai-loadbalancer-network
+    restart: unless-stopped
+
+  # Redis Cache and Session Store
+  redis:
+    image: redis:7-alpine
+    container_name: redis-service
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai-loadbalancer-network
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Zookeeper for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+    networks:
+      - ai-loadbalancer-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Kafka Message Broker
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - ai-loadbalancer-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # MailHog for Email Testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    networks:
+      - ai-loadbalancer-network
+    restart: unless-stopped
+
+  # =============================================================================
+  # MICROSERVICES
+  # =============================================================================
+
+  # User Service
+  user-service:
+    build:
+      context: .
+      dockerfile: ./user-service/Dockerfile
+    container_name: user-service
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVICE_HOST=user-service
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=userdb
+      - DB_USERNAME=ecommerce_user
+      - DB_PASSWORD=ecommerce_pass
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - KAFKA_BROKERS=kafka:29092
+      - JWT_SECRET=mySecretKey123456789012345678901234567890123456789012345678901234567890
+      - SERVER_PORT=8081
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    networks:
+      - ai-loadbalancer-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Cart Service
+  cart-service:
+    build:
+      context: .
+      dockerfile: ./cart-service/Dockerfile
+    container_name: cart-service
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVICE_HOST=cart-service
+      - REDIS_HOST=redis-service
+      - REDIS_PORT=6379
+      - KAFKA_BROKERS=kafka:29092
+      - JWT_SECRET=mySecretKey123456789012345678901234567890123456789012345678901234567890
+      - SERVER_PORT=8082
+    depends_on:
+      - redis
+      - kafka
+    networks:
+      - ai-loadbalancer-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Order Service
+  order-service:
+    build:
+      context: .
+      dockerfile: ./order-service/Dockerfile
+    container_name: order-service
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVICE_HOST=order-service
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/ecommerce
+      - SPRING_DATASOURCE_USERNAME=ecommerce_user
+      - SPRING_DATASOURCE_PASSWORD=ecommerce_pass
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - KAFKA_BROKERS=kafka:29092
+      - JWT_SECRET=mySecretKey123456789012345678901234567890123456789012345678901234567890
+      - INVENTORY_SERVICE_URL=http://inventory-service:8084
+      - PAYMENT_SERVICE_URL=http://payment-service:8085
+      - CART_SERVICE_URL=http://cart-service:8082
+      - SERVER_PORT=8083
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    networks:
+      - ai-loadbalancer-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Inventory Service
+  inventory-service:
+    build:
+      context: .
+      dockerfile: ./inventory-service/Dockerfile
+    container_name: inventory-service
+    ports:
+      - "8084:8084"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVICE_HOST=inventory-service
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=inventory_db
+      - DB_USERNAME=ecommerce_user
+      - DB_PASSWORD=ecommerce_pass
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - KAFKA_BROKERS=kafka:29092
+      - JWT_SECRET=mySecretKey123456789012345678901234567890123456789012345678901234567890
+      - SERVER_PORT=8084
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    networks:
+      - ai-loadbalancer-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Payment Service
+  payment-service:
+    build:
+      context: .
+      dockerfile: ./payment-service/Dockerfile
+    container_name: payment-service
+    ports:
+      - "8085:8085"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVICE_HOST=payment-service
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=ecommerce
+      - DB_USERNAME=ecommerce_user
+      - DB_PASSWORD=ecommerce_pass
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - KAFKA_BROKERS=kafka:29092
+      - JWT_SECRET=mySecretKey123456789012345678901234567890123456789012345678901234567890
+      - SERVER_PORT=8085
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    networks:
+      - ai-loadbalancer-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: ./notification-service/Dockerfile
+    container_name: notification-service
+    ports:
+      - "8086:8086"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVICE_HOST=notification-service
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=ecommerce
+      - DB_USERNAME=ecommerce_user
+      - DB_PASSWORD=ecommerce_pass
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - KAFKA_BROKERS=kafka:29092
+      - JWT_SECRET=mySecretKey123456789012345678901234567890123456789012345678901234567890
+      - MAIL_HOST=mailhog
+      - MAIL_PORT=1025
+      - TWILIO_ACCOUNT_SID=your-account-sid
+      - TWILIO_AUTH_TOKEN=your-auth-token
+      - SERVER_PORT=8086
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+      - mailhog
+    networks:
+      - ai-loadbalancer-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # =============================================================================
+  # AI/ML COMPONENTS
+  # =============================================================================
+
+  # Reinforcement Learning Agent
+  rl-agent:
+    build:
+      context: ./rl_agent
+      dockerfile: Dockerfile
+    container_name: rl-agent
+    ports:
+      - "8087:8087"
+    environment:
+      - PROMETHEUS_URL=http://prometheus:9090
+      - LOAD_BALANCER_URL=http://load-balancer:8080
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - API_PORT=8087
+    depends_on:
+      - redis
+      - prometheus
+    networks:
+      - ai-loadbalancer-network
+    volumes:
+      - ./rl_agent/models:/app/models
+      - ./rl_agent/logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8087/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Load Balancer with AI Integration
+  load-balancer:
+    build:
+      context: .
+      dockerfile: ./load-balancer/Dockerfile
+    container_name: load-balancer
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVICE_HOST=load-balancer
+      - REDIS_HOST=redis-service
+      - REDIS_PORT=6379
+      - RL_COLLECTOR_URL=http://rl-agent:8087
+      - USER_SERVICE_URL=http://user-service:8081
+      - CART_SERVICE_URL=http://cart-service:8082
+      - ORDER_SERVICE_URL=http://order-service:8083
+      - INVENTORY_SERVICE_URL=http://inventory-service:8084
+      - PAYMENT_SERVICE_URL=http://payment-service:8085
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8086
+      - SERVER_PORT=8080
+    depends_on:
+      - redis
+      - user-service
+      - cart-service
+      - order-service
+      - inventory-service
+      - payment-service
+      - notification-service
+      - rl-agent
+    networks:
+      - ai-loadbalancer-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # =============================================================================
+  # MONITORING & OBSERVABILITY
+  # =============================================================================
+
+  # Prometheus Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - ai-loadbalancer-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--storage.tsdb.retention.time=7d'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Grafana Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - ai-loadbalancer-network
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+

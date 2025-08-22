@@ -1,0 +1,40 @@
+# requirements.txt
+prometheus-client==0.17.1
+requests==2.31.0
+schedule==1.2.0
+pydantic>=2.3.0
+pydantic-settings==2.2.1
+structlog==23.1.0
+colorlog==6.7.0
+
+# Core scientific and ML dependencies
+numpy>=1.22.0
+scikit-learn>=1.1.0
+scipy>=1.8.0
+
+# HTTP and API clients
+requests>=2.25
+prometheus-api-client>=0.5.2
+
+# Web API (inference and health endpoints)
+fastapi>=0.85.0
+uvicorn[standard]>=0.17.6
+
+# Logging and configuration
+PyYAML>=6.0
+# Built-in logging is standard in Python, but logging configuration often needs PyYAML if using YAML settings
+
+# Scheduling (metrics collection, episodic training)
+schedule>=1.1.0
+
+# Utility for asynchronous operations
+aiofiles>=23.1.0
+
+# For serialization, safety, backup, and common file utilities
+joblib>=1.2.0
+
+# For type enforcement and runtime checks
+pydantic>=1.10.0
+
+# Optionally for enhanced metrics export (if you wish to expose your agent’s performance for Prometheus scraping)
+prometheus-client>=0.15.0

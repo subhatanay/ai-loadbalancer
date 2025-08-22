@@ -1,0 +1,159 @@
+server:
+  port: 8085
+  servlet:
+    context-path: /
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+  http2:
+    enabled: true
+  error:
+    include-message: always
+    include-binding-errors: always
+spring:
+  application:
+    name: payment-service
+  main:
+    banner-mode: console
+    lazy-initialization: false
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:default}
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      indent-output: true
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+  sql:
+    init:
+      mode: never
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ecommerce}
+    username: ${DB_USERNAME:ecommerce_user}
+    password: ${DB_PASSWORD:ecommerce_pass}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 15
+      minimum-idle: 2
+      idle-timeout: 300000
+      connection-timeout: 20000
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 10
+        order_inserts: true
+        order_updates: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: 0
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 10
+          max-wait: -1ms
+          max-idle: 5
+          min-idle: 1
+  cache:
+    type: redis
+    redis:
+      time-to-live: 1800000  # 30 minutes
+      cache-null-values: false
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        spring.json.add.type.headers: false
+    consumer:
+      group-id: payment-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.bits.payment.event"
+        spring.json.use.type.headers: false
+jwt:
+  secret: ${JWT_SECRET:mySecretKey123456789012345678901234567890123456789012345678901234567890}
+  expiration: ${JWT_EXPIRATION:86400000}
+service:
+  name: payment-service
+  host: ${POD_IP:localhost}
+  port: ${server.port}
+  registration:
+    ttl-seconds: 30
+    refresh-interval-ms: 20000
+    ttl: 30
+payment:
+  gateway:
+    timeout-ms: 30000
+    retry-attempts: 3
+    retry-delay-ms: 1000
+  refund:
+    delay-ms: 1000
+    timeout-ms: 30000
+  processing:
+    delay-ms: 500
+    success-rate: 0.95  # 95% success rate for simulation
+  currencies:
+    default: INR
+    supported: INR,USD,EUR,GBP,AUD
+  methods:
+    enabled: CREDIT_CARD,DEBIT_CARD,UPI,PAYPAL,WALLET,BANK_TRANSFER,COD
+logging:
+  level:
+    com.bits.payment: INFO
+    org.springframework.cache: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.kafka: INFO
+    org.springframework.transaction: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:WARN}
+    org.hibernate.type.descriptor.sql.BasicBinder: ${SQL_LOG_LEVEL:WARN}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/payment-service.log
+  logback:
+    rollingpolicy:
+      file-name-pattern: logs/payment-service.%d{yyyy-MM-dd}.%i.log
+      max-file-size: 10MB
+      max-history: 10
+      total-size-cap: 100MB
+      clean-history-on-start: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 60s
+    tags:
+      application: ${spring.application.name}
+      service: payment-service
+      podname: ${HOSTNAME:unknown}
+  info:
+    env:
+      enabled: true
+

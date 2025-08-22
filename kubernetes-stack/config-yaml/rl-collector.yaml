@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rl-experience-collector
+  namespace: ai-loadbalancer
+  labels:
+    app: rl-experience-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rl-experience-collector
+  template:
+    metadata:
+      labels:
+        app: rl-experience-collector
+    spec:
+      containers:
+      - name: rl-experience-collector
+        image: rl-experience-collector:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8081
+        env:
+        - name: EXPERIENCE_FILE
+          value: "/app/data/rl_experiences.jsonl"
+        - name: LOG_LEVEL
+          value: "INFO"
+        volumeMounts:
+        - name: data-volume
+          mountPath: /app/data
+        # Removed logs-volume mount that was overriding /app directory
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: data-volume
+        hostPath:
+          path: /tmp/rl-collector-data
+          type: DirectoryOrCreate
+      - name: logs-volume
+        hostPath:
+          path: /tmp/rl-collector-logs
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rl-experience-collector
+  namespace: ai-loadbalancer
+  labels:
+    app: rl-experience-collector
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8081
+    targetPort: 8081
+    protocol: TCP
+  selector:
+    app: rl-experience-collector

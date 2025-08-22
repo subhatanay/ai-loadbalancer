@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: ai-loadbalancer
+  labels:
+    app: order-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+    spec:
+      containers:
+      - name: order-service
+        image: order-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8083
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "docker"
+        - name: SERVICE_HOST
+          value: "order-service"
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres.ai-loadbalancer.svc.cluster.local:5432/orderdb"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "ecommerce_user"
+        - name: SPRING_DATASOURCE_PASSWORD
+          value: "ecommerce_pass"
+        - name: REDIS_HOST
+          value: "redis.ai-loadbalancer.svc.cluster.local"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: KAFKA_BROKERS
+          value: "kafka.ai-loadbalancer.svc.cluster.local:9092"
+        - name: JWT_SECRET
+          value: "mySecretKey123456789012345678901234567890123456789012345678901234567890"
+        - name: JWT_EXPIRATION
+          value: "86400000"
+        - name: INVENTORY_SERVICE_URL
+          value: "http://ai-loadbalancer-service.ai-loadbalancer.svc.cluster.local:8080/proxy/inventory-service"
+        - name: PAYMENT_SERVICE_URL
+          value: "http://ai-loadbalancer-service.ai-loadbalancer.svc.cluster.local:8080/proxy/payment-service"
+        - name: CART_SERVICE_URL
+          value: "http://ai-loadbalancer-service.ai-loadbalancer.svc.cluster.local:8080/proxy/cart-service"
+        - name: NOTIFICATION_SERVICE_URL
+          value: "http://ai-loadbalancer-service.ai-loadbalancer.svc.cluster.local:8080/proxy/notification-service"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: SERVER_PORT
+          value: "8083"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8083
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8083
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  namespace: ai-loadbalancer
+  labels:
+    app: order-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8083
+    targetPort: 8083
+    protocol: TCP
+  selector:
+    app: order-service

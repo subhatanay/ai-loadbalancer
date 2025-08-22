@@ -1,0 +1,121 @@
+service:
+  name: ${spring.application.name}
+  host: ${SERVICE_HOST:localhost}
+  registration:
+    ttl: 30
+
+spring:
+  application:
+    name: order-service
+  cache:
+    type: redis
+    redis:
+      time-to-live: 30s
+      cache-null-values: false
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/orderdb}
+    username: postgres
+    password: password
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-timeout: 30000
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+        cache:
+          use_second_level_cache: false
+          use_query_cache: false
+  data:
+    redis:
+      host: ${REDIS_HOST:redis-service}
+      port: 6379
+      timeout: 2000ms
+      jedis:
+        pool:
+          max-active: 20
+          max-idle: 8
+          min-idle: 2
+          max-wait: 2000ms
+          time-between-eviction-runs: 30s
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:kafka:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 1
+    consumer:
+      group-id: order-service-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      properties:
+        spring.json.trusted.packages: "com.bits.order.event,com.bits.common.event"
+
+kafka:
+  topics:
+    order-events: order-events
+    inventory-events: inventory-events
+    payment-events: payment-events
+    notification-events: notification-events
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+      service: order-service
+      podname: ${HOSTNAME:unknown}
+
+server:
+  port: 8083
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 50
+
+services:
+  inventory-service:
+    url: ${INVENTORY_SERVICE_URL:http://localhost:8084}
+  payment-service:
+    url: ${PAYMENT_SERVICE_URL:http://localhost:8085}
+  cart-service:
+    url: ${CART_SERVICE_URL:http://localhost:8082}
+  notification-service:
+    url: ${NOTIFICATION_SERVICE_URL:http://localhost:8086}
+
+logging:
+  level:
+    org.springframework.web: INFO
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:WARN}
+    org.hibernate.type.descriptor.sql.BasicBinder: ${SQL_LOG_LEVEL:WARN}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+

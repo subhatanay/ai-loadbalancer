@@ -1,0 +1,98 @@
+# application.yml for Cart Service
+server:
+  port: 8082
+
+spring:
+  application:
+    name: cart-service
+  
+  data:
+    redis:
+      host: ${REDIS_HOST:redis-service}
+      port: ${REDIS_PORT:6379}
+      database: 0
+      timeout: 2000ms
+      jedis:
+        pool:
+          max-total: 20
+          max-wait: -1ms
+          max-idle: 10
+          min-idle: 0
+  
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:kafka:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+    consumer:
+      group-id: cart-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.bits.cartservice.event"
+        spring.json.type.mapping: "cartEvent:com.bits.cartservice.event.CartEvent"
+
+# JWT Configuration (same secret as User Service)
+jwt:
+  secret: ${JWT_SECRET:mySecretKey123456789012345678901234567890123456789012345678901234567890}
+  expiration: ${JWT_EXPIRATION:86400000} # 24 hours
+
+# Service registration
+service:
+  name: cart-service
+  host: ${POD_IP:localhost}
+  port: ${SERVER_PORT:8082}
+  registration:
+    ttl-seconds: 30
+    refresh-interval-ms: 20000
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.bits.cartservice: DEBUG
+    org.springframework.cache: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.kafka: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/cart-service.log
+  logback:
+    rollingpolicy:
+      file-name-pattern: logs/cart-service.%d{yyyy-MM-dd}.%i.log
+      max-file-size: 10MB
+      max-history: 10
+      total-size-cap: 100MB
+
+# Management endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+      podname: ${HOSTNAME:unknown}
+
+# Services Configuration
+services:
+  ai-loadbalancer:
+    url: ${AI_LOADBALANCER_URL:http://ai-loadbalancer:8080}
+
+# Environment variables (these will be set by Docker/Kubernetes)
+# POD_NAME and POD_IP are injected as environment variables

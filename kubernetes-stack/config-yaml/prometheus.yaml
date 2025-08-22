@@ -1,0 +1,173 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: ai-loadbalancer
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        monitor: 'ai-loadbalancer-monitor'
+
+    scrape_configs:
+      # Prometheus itself
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+        metrics_path: '/metrics'
+        scrape_interval: 15s
+
+      # Kubernetes pods discovery - scrapes all individual pod instances
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names:
+                - ai-loadbalancer
+        relabel_configs:
+          # Only scrape pods with prometheus.io/scrape annotation
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          
+          # Use custom metrics path if specified, default to /actuator/prometheus
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+            replacement: $1
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: ^$
+            replacement: /actuator/prometheus
+          
+          # Set the address with pod IP and custom port
+          - source_labels: [__meta_kubernetes_pod_ip, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: (.+);(.+)
+            replacement: $1:$2
+            target_label: __address__
+          
+          # Add pod name as unique identifier
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod_name
+          
+          # Add pod name to instance label to make each pod unique
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: instance
+          
+          # Add namespace as label
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: kubernetes_namespace
+          
+          # Add service name from app label
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: service_name
+          
+          # Keep original job name as kubernetes-pods but add service info
+          - source_labels: [__meta_kubernetes_pod_label_app, __meta_kubernetes_pod_name]
+            action: replace
+            regex: (.+);(.+)
+            replacement: $1-$2
+            target_label: job
+
+      # Fallback static configs for services without pod annotations
+      - job_name: 'ai-loadbalancer-static'
+        static_configs:
+          - targets: ['ai-loadbalancer-service.ai-loadbalancer.svc.cluster.local:8080']
+        metrics_path: '/actuator/prometheus'
+        scrape_interval: 10s
+        scrape_timeout: 5s
+
+      - job_name: 'rl-experience-collector'
+        static_configs:
+          - targets: ['rl-experience-collector.ai-loadbalancer.svc.cluster.local:8087']
+        metrics_path: '/metrics'
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: ai-loadbalancer
+  labels:
+    app: prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      containers:
+      - name: prometheus
+        image: prom/prometheus:latest
+        ports:
+        - containerPort: 9090
+        args:
+        - '--config.file=/etc/prometheus/prometheus.yml'
+        - '--storage.tsdb.path=/prometheus'
+        - '--web.console.libraries=/etc/prometheus/console_libraries'
+        - '--web.console.templates=/etc/prometheus/consoles'
+        - '--web.enable-lifecycle'
+        - '--storage.tsdb.retention.time=7d'
+        volumeMounts:
+        - name: prometheus-config
+          mountPath: /etc/prometheus/prometheus.yml
+          subPath: prometheus.yml
+          readOnly: true
+        - name: prometheus-data
+          mountPath: /prometheus
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9090
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: prometheus-config
+        configMap:
+          name: prometheus-config
+      - name: prometheus-data
+        emptyDir:
+          sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-service
+  namespace: ai-loadbalancer
+  labels:
+    app: prometheus
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9090
+    targetPort: 9090
+    protocol: TCP
+  selector:
+    app: prometheus

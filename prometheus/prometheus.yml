@@ -1,0 +1,104 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'ai-loadbalancer-monitor'
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # Kubernetes pods discovery - scrapes all individual pod instances
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - ai-loadbalancer
+    relabel_configs:
+      # Only scrape pods with prometheus.io/scrape annotation
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      
+      # Use custom metrics path if specified, default to /actuator/prometheus
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+        replacement: $1
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: ^$
+        replacement: /actuator/prometheus
+      
+      # Set the address with pod IP and custom port
+      - source_labels: [__meta_kubernetes_pod_ip, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: (.+);(.+)
+        replacement: $1:$2
+        target_label: __address__
+      
+      # Add pod name as unique identifier
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod_name
+      
+      # Add pod name to instance label to make each pod unique
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: instance
+      
+      # Add namespace as label
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: kubernetes_namespace
+      
+      # Add service name from app label
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        target_label: service_name
+      
+      # Keep original job name as kubernetes-pods but add service info
+      - source_labels: [__meta_kubernetes_pod_label_app, __meta_kubernetes_pod_name]
+        action: replace
+        regex: (.+);(.+)
+        replacement: $1-$2
+        target_label: job
+
+  # Fallback static configs for services without pod annotations
+  - job_name: 'ai-loadbalancer-static'
+    static_configs:
+      - targets: ['ai-loadbalancer-service.ai-loadbalancer.svc.cluster.local:8080']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # Infrastructure Services
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-service.ai-loadbalancer.svc.cluster.local:6379']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # Kafka JMX Metrics (if JMX exporter is configured)
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka.ai-loadbalancer.svc.cluster.local:9308']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+
+  # PostgreSQL Metrics (if postgres_exporter is configured)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres.ai-loadbalancer.svc.cluster.local:9187']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s

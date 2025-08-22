@@ -1,0 +1,784 @@
+{
+  "rl_training_scenarios": {
+    "base_config": {
+      "base_url": "http://localhost:8080/proxy",
+      "request_timeout": 15,
+      "retry_attempts": 1,
+      "retry_delay": 0.5,
+      "session_duration_minutes": 5,
+      "think_time_min": 0.1,
+      "think_time_max": 1.0,
+      "connection_pool_size": 200,
+      "max_retries_per_session": 1
+    },
+
+    "enhanced_test_products": [
+      {
+        "id": "LAPTOP-001",
+        "name": "Gaming Laptop Pro 15",
+        "category": "Electronics",
+        "price": 1299.99,
+        "image": "https://example.com/laptop-pro.jpg"
+      },
+      {
+        "id": "PHONE-001", 
+        "name": "Smartphone Ultra",
+        "category": "Electronics",
+        "price": 999.99,
+        "image": "https://example.com/smartphone.jpg"
+      },
+      {
+        "id": "HEADPHONES-001",
+        "name": "Wireless Headphones Pro",
+        "category": "Electronics", 
+        "price": 299.99,
+        "image": "https://example.com/headphones.jpg"
+      },
+      {
+        "id": "TABLET-001",
+        "name": "Tablet Pro 12",
+        "category": "Electronics",
+        "price": 799.99,
+        "image": "https://example.com/tablet-pro.jpg"
+      },
+      {
+        "id": "WATCH-001",
+        "name": "Smart Watch Fitness",
+        "category": "Electronics",
+        "price": 299.99,
+        "image": "https://example.com/smartwatch.jpg"
+      },
+      {
+        "id": "CAMERA-001",
+        "name": "Digital Camera 4K",
+        "category": "Electronics",
+        "price": 1599.99,
+        "image": "https://example.com/camera.jpg"
+      }
+    ],
+
+    "realistic_shipping_addresses": [
+      {
+        "street": "123 Tech Street",
+        "city": "San Francisco",
+        "state": "CA",
+        "zipCode": "94105",
+        "country": "USA"
+      },
+      {
+        "street": "456 Innovation Ave",
+        "city": "Austin",
+        "state": "TX", 
+        "zipCode": "73301",
+        "country": "USA"
+      },
+      {
+        "street": "789 Startup Blvd",
+        "city": "Seattle",
+        "state": "WA",
+        "zipCode": "98101",
+        "country": "USA"
+      }
+    ],
+
+    "user_behavior_profiles": {
+      "quick_browsers": {
+        "description": "Fast browsing users with quick decisions",
+        "session_duration_range": [2, 8],
+        "think_time_range": [0.3, 1.5],
+        "action_probabilities": {
+          "browse": 0.6,
+          "search": 0.2,
+          "cart": 0.15,
+          "order": 0.05
+        },
+        "conversion_rate": 0.25,
+        "pages_per_session": [3, 8],
+        "cart_abandonment_rate": 0.4,
+        "average_cart_size": [1, 3]
+      },
+      "careful_shoppers": {
+        "description": "Methodical shoppers who research before buying",
+        "session_duration_range": [10, 25],
+        "think_time_range": [1.5, 4.0],
+        "action_probabilities": {
+          "browse": 0.5,
+          "search": 0.25,
+          "cart": 0.2,
+          "order": 0.05
+        },
+        "conversion_rate": 0.45,
+        "pages_per_session": [8, 20],
+        "cart_abandonment_rate": 0.25,
+        "average_cart_size": [2, 5]
+      },
+      "impulse_buyers": {
+        "description": "Quick decision makers with high conversion",
+        "session_duration_range": [3, 12],
+        "think_time_range": [0.5, 2.0],
+        "action_probabilities": {
+          "browse": 0.3,
+          "search": 0.1,
+          "cart": 0.4,
+          "order": 0.2
+        },
+        "conversion_rate": 0.6,
+        "pages_per_session": [2, 6],
+        "cart_abandonment_rate": 0.2,
+        "average_cart_size": [1, 4]
+      },
+      "bulk_buyers": {
+        "description": "Business users making large purchases",
+        "session_duration_range": [15, 35],
+        "think_time_range": [1.0, 3.0],
+        "action_probabilities": {
+          "browse": 0.4,
+          "search": 0.2,
+          "cart": 0.3,
+          "order": 0.1
+        },
+        "conversion_rate": 0.7,
+        "pages_per_session": [10, 25],
+        "cart_abandonment_rate": 0.15,
+        "average_cart_size": [5, 15]
+      }
+    },
+
+    "training_scenarios": {
+      "flash_sale_simulation": {
+        "description": "Simulate flash sale with extreme concurrent load",
+        "total_users": 300,
+        "test_duration_minutes": 20,
+        "max_concurrent_users": 250,
+        "ramp_up_time_seconds": 60,
+        "data_collection_interval_seconds": 2,
+        
+        "traffic_patterns": [
+          {
+            "name": "flash_sale_burst",
+            "start_minute": 0,
+            "duration_minutes": 5,
+            "intensity": "extreme",
+            "concurrent_users": 250,
+            "user_behavior_distribution": {
+              "impulse_buyers": 0.6,
+              "bulk_buyers": 0.3,
+              "quick_browsers": 0.1
+            },
+            "scenario_weights": {
+              "browse_weight": 10,
+              "search_weight": 5,
+              "cart_weight": 60,
+              "order_weight": 25,
+              "profile_weight": 0
+            },
+            "service_load_characteristics": {
+              "user_service_load": "high",
+              "inventory_service_load": "extreme",
+              "cart_service_load": "extreme",
+              "order_service_load": "very_high",
+              "payment_service_load": "very_high"
+            }
+          },
+          {
+            "name": "post_flash_sale_queue",
+            "start_minute": 5,
+            "duration_minutes": 15,
+            "intensity": "high",
+            "concurrent_users": 100,
+            "user_behavior_distribution": {
+              "careful_shoppers": 0.4,
+              "quick_browsers": 0.4,
+              "impulse_buyers": 0.2
+            },
+            "scenario_weights": {
+              "browse_weight": 40,
+              "search_weight": 20,
+              "cart_weight": 30,
+              "order_weight": 10,
+              "profile_weight": 0
+            },
+            "service_load_characteristics": {
+              "user_service_load": "medium",
+              "inventory_service_load": "high",
+              "cart_service_load": "medium",
+              "order_service_load": "medium",
+              "payment_service_load": "medium"
+            }
+          }
+        ]
+      },
+
+      "service_degradation_simulation": {
+        "description": "Test load balancer behavior during service degradation",
+        "total_users": 150,
+        "test_duration_minutes": 45,
+        "max_concurrent_users": 80,
+        "ramp_up_time_seconds": 120,
+        "data_collection_interval_seconds": 5,
+        
+        "traffic_patterns": [
+          {
+            "name": "normal_baseline",
+            "start_minute": 0,
+            "duration_minutes": 15,
+            "intensity": "medium",
+            "concurrent_users": 50,
+            "user_behavior_distribution": {
+              "careful_shoppers": 0.4,
+              "quick_browsers": 0.3,
+              "impulse_buyers": 0.2,
+              "bulk_buyers": 0.1
+            },
+            "scenario_weights": {
+              "browse_weight": 40,
+              "search_weight": 20,
+              "cart_weight": 25,
+              "order_weight": 15,
+              "profile_weight": 0
+            },
+            "service_load_characteristics": {
+              "user_service_load": "medium",
+              "inventory_service_load": "medium",
+              "cart_service_load": "medium",
+              "order_service_load": "medium",
+              "payment_service_load": "medium"
+            }
+          },
+          {
+            "name": "inventory_service_slowdown",
+            "start_minute": 15,
+            "duration_minutes": 15,
+            "intensity": "medium",
+            "concurrent_users": 50,
+            "user_behavior_distribution": {
+              "careful_shoppers": 0.4,
+              "quick_browsers": 0.3,
+              "impulse_buyers": 0.2,
+              "bulk_buyers": 0.1
+            },
+            "scenario_weights": {
+              "browse_weight": 50,
+              "search_weight": 25,
+              "cart_weight": 20,
+              "order_weight": 5,
+              "profile_weight": 0
+            },
+            "service_load_characteristics": {
+              "user_service_load": "medium",
+              "inventory_service_load": "very_high",
+              "cart_service_load": "medium",
+              "order_service_load": "low",
+              "payment_service_load": "low"
+            }
+          },
+          {
+            "name": "cart_service_instability",
+            "start_minute": 30,
+            "duration_minutes": 15,
+            "intensity": "medium",
+            "concurrent_users": 50,
+            "user_behavior_distribution": {
+              "careful_shoppers": 0.4,
+              "quick_browsers": 0.3,
+              "impulse_buyers": 0.2,
+              "bulk_buyers": 0.1
+            },
+            "scenario_weights": {
+              "browse_weight": 60,
+              "search_weight": 20,
+              "cart_weight": 15,
+              "order_weight": 5,
+              "profile_weight": 0
+            },
+            "service_load_characteristics": {
+              "user_service_load": "medium",
+              "inventory_service_load": "medium",
+              "cart_service_load": "very_high",
+              "order_service_load": "low",
+              "payment_service_load": "low"
+            }
+          }
+        ]
+      }
+    }
+  },
+
+  "stress_test_scenarios": {
+    "description": "Stress testing scenarios for RL training under extreme conditions",
+    "version": "1.0",
+    "created_for": "Edge case RL training data generation",
+    
+    "base_config": {
+      "base_url": "http://localhost:8080/proxy",
+      "request_timeout": 15,
+      "retry_attempts": 1,
+      "retry_delay": 0.5,
+      "session_duration_minutes": 5,
+      "think_time_min": 0.1,
+      "think_time_max": 1.0,
+      "connection_pool_size": 200,
+      "max_retries_per_session": 1
+    },
+
+    "extreme_load_scenarios": {
+      "flash_sale_simulation": {
+        "description": "Simulate flash sale with extreme concurrent load",
+        "total_users": 300,
+        "test_duration_minutes": 20,
+        "max_concurrent_users": 250,
+        "ramp_up_time_seconds": 60,
+        
+        "traffic_patterns": [
+          {
+            "name": "flash_sale_burst",
+            "start_minute": 0,
+            "duration_minutes": 5,
+            "intensity": "extreme",
+            "concurrent_users": 250,
+            "user_behavior_distribution": {
+              "impulse_buyers": 0.6,
+              "bulk_buyers": 0.3,
+              "quick_browsers": 0.1
+            },
+            "scenario_weights": {
+              "browse_weight": 10,
+              "search_weight": 5,
+              "cart_weight": 60,
+              "order_weight": 25
+            },
+            "target_products": ["LAPTOP-001", "PHONE-001"],
+            "expected_service_stress": {
+              "inventory_service": "extreme",
+              "cart_service": "extreme",
+              "order_service": "very_high",
+              "payment_service": "very_high",
+              "user_service": "high"
+            }
+          },
+          {
+            "name": "post_flash_sale_queue",
+            "start_minute": 5,
+            "duration_minutes": 15,
+            "intensity": "high",
+            "concurrent_users": 100,
+            "user_behavior_distribution": {
+              "careful_shoppers": 0.4,
+              "quick_browsers": 0.4,
+              "impulse_buyers": 0.2
+            },
+            "scenario_weights": {
+              "browse_weight": 40,
+              "search_weight": 20,
+              "cart_weight": 30,
+              "order_weight": 10
+            },
+            "expected_service_stress": {
+              "inventory_service": "high",
+              "cart_service": "medium",
+              "order_service": "medium",
+              "payment_service": "medium",
+              "user_service": "medium"
+            }
+          }
+        ]
+      },
+
+      "service_degradation_simulation": {
+        "description": "Test load balancer behavior during service degradation",
+        "total_users": 150,
+        "test_duration_minutes": 45,
+        "max_concurrent_users": 80,
+        "ramp_up_time_seconds": 120,
+        
+        "traffic_patterns": [
+          {
+            "name": "normal_baseline",
+            "start_minute": 0,
+            "duration_minutes": 15,
+            "intensity": "medium",
+            "concurrent_users": 50,
+            "user_behavior_distribution": {
+              "careful_shoppers": 0.4,
+              "quick_browsers": 0.3,
+              "impulse_buyers": 0.2,
+              "bulk_buyers": 0.1
+            },
+            "scenario_weights": {
+              "browse_weight": 40,
+              "search_weight": 20,
+              "cart_weight": 25,
+              "order_weight": 15
+            },
+            "simulated_conditions": "normal"
+          },
+          {
+            "name": "inventory_service_slowdown",
+            "start_minute": 15,
+            "duration_minutes": 15,
+            "intensity": "medium",
+            "concurrent_users": 50,
+            "user_behavior_distribution": {
+              "careful_shoppers": 0.4,
+              "quick_browsers": 0.3,
+              "impulse_buyers": 0.2,
+              "bulk_buyers": 0.1
+            },
+            "scenario_weights": {
+              "browse_weight": 50,
+              "search_weight": 25,
+              "cart_weight": 20,
+              "order_weight": 5
+            },
+            "simulated_conditions": {
+              "inventory_service_latency_multiplier": 5.0,
+              "inventory_service_error_rate": 0.2
+            }
+          },
+          {
+            "name": "cart_service_instability",
+            "start_minute": 30,
+            "duration_minutes": 15,
+            "intensity": "medium",
+            "concurrent_users": 50,
+            "user_behavior_distribution": {
+              "careful_shoppers": 0.4,
+              "quick_browsers": 0.3,
+              "impulse_buyers": 0.2,
+              "bulk_buyers": 0.1
+            },
+            "scenario_weights": {
+              "browse_weight": 60,
+              "search_weight": 20,
+              "cart_weight": 15,
+              "order_weight": 5
+            },
+            "simulated_conditions": {
+              "cart_service_error_rate": 0.3,
+              "cart_service_timeout_rate": 0.15
+            }
+          }
+        ]
+      },
+
+      "mixed_load_chaos": {
+        "description": "Chaotic mixed load with varying user behaviors",
+        "total_users": 200,
+        "test_duration_minutes": 60,
+        "max_concurrent_users": 120,
+        "ramp_up_time_seconds": 180,
+        
+        "traffic_patterns": [
+          {
+            "name": "chaos_wave_1",
+            "start_minute": 0,
+            "duration_minutes": 20,
+            "intensity": "variable",
+            "concurrent_users": 80,
+            "service_load_characteristics": {
+              "user_service": {
+                "expected_rps": 120,
+                "error_rate_threshold": 0.05,
+                "latency_p99_threshold_ms": 500
+              },
+              "cart_service": {
+                "expected_rps": 80,
+                "error_rate_threshold": 0.05,
+                "latency_p99_threshold_ms": 600
+              },
+              "inventory_service": {
+                "expected_rps": 100,
+                "error_rate_threshold": 0.03,
+                "latency_p99_threshold_ms": 400
+              },
+              "order_service": {
+                "expected_rps": 60,
+                "error_rate_threshold": 0.02,
+                "latency_p99_threshold_ms": 800
+              }
+            },
+            "user_behavior_distribution": {
+              "quick_browsers": 0.5,
+              "careful_shoppers": 0.2,
+              "impulse_buyers": 0.2,
+              "bulk_buyers": 0.1
+            },
+            "scenario_weights": {
+              "browse_weight": 45,
+              "search_weight": 25,
+              "cart_weight": 20,
+              "order_weight": 10
+            },
+            "chaos_parameters": {
+              "concurrent_user_variance": 0.3,
+              "think_time_variance": 0.5,
+              "action_randomness": 0.2
+            }
+          },
+          {
+            "name": "chaos_wave_2",
+            "start_minute": 20,
+            "duration_minutes": 20,
+            "intensity": "variable",
+            "concurrent_users": 120,
+            "service_load_characteristics": {
+              "user_service": {
+                "expected_rps": 180,
+                "error_rate_threshold": 0.05,
+                "latency_p99_threshold_ms": 700
+              },
+              "cart_service": {
+                "expected_rps": 120,
+                "error_rate_threshold": 0.05,
+                "latency_p99_threshold_ms": 800
+              },
+              "inventory_service": {
+                "expected_rps": 150,
+                "error_rate_threshold": 0.03,
+                "latency_p99_threshold_ms": 600
+              },
+              "order_service": {
+                "expected_rps": 100,
+                "error_rate_threshold": 0.02,
+                "latency_p99_threshold_ms": 1000
+              }
+            },
+            "user_behavior_distribution": {
+              "impulse_buyers": 0.4,
+              "bulk_buyers": 0.3,
+              "careful_shoppers": 0.2,
+              "quick_browsers": 0.1
+            },
+            "scenario_weights": {
+              "browse_weight": 20,
+              "search_weight": 15,
+              "cart_weight": 40,
+              "order_weight": 25
+            },
+            "chaos_parameters": {
+              "concurrent_user_variance": 0.4,
+              "think_time_variance": 0.6,
+              "action_randomness": 0.3
+            }
+          },
+          {
+            "name": "chaos_wave_3",
+            "start_minute": 40,
+            "duration_minutes": 20,
+            "intensity": "variable",
+            "concurrent_users": 60,
+            "service_load_characteristics": {
+              "user_service": {
+                "expected_rps": 90,
+                "error_rate_threshold": 0.05,
+                "latency_p99_threshold_ms": 400
+              },
+              "cart_service": {
+                "expected_rps": 60,
+                "error_rate_threshold": 0.05,
+                "latency_p99_threshold_ms": 500
+              },
+              "inventory_service": {
+                "expected_rps": 80,
+                "error_rate_threshold": 0.03,
+                "latency_p99_threshold_ms": 300
+              },
+              "order_service": {
+                "expected_rps": 40,
+                "error_rate_threshold": 0.02,
+                "latency_p99_threshold_ms": 600
+              }
+            },
+            "user_behavior_distribution": {
+              "careful_shoppers": 0.6,
+              "quick_browsers": 0.2,
+              "bulk_buyers": 0.15,
+              "impulse_buyers": 0.05
+            },
+            "scenario_weights": {
+              "browse_weight": 50,
+              "search_weight": 30,
+              "cart_weight": 15,
+              "order_weight": 5
+            },
+            "chaos_parameters": {
+              "concurrent_user_variance": 0.2,
+              "think_time_variance": 0.3,
+              "action_randomness": 0.1
+            }
+          }
+        ]
+      }
+    },
+
+    "failure_recovery_scenarios": {
+      "service_failure_cascade": {
+        "description": "Test cascading service failures and recovery",
+        "total_users": 100,
+        "test_duration_minutes": 90,
+        "max_concurrent_users": 60,
+        
+        "failure_timeline": [
+          {
+            "minute": 10,
+            "event": "inventory_service_partial_failure",
+            "impact": "30% requests fail",
+            "duration_minutes": 15
+          },
+          {
+            "minute": 25,
+            "event": "cart_service_high_latency",
+            "impact": "5x normal response time",
+            "duration_minutes": 20
+          },
+          {
+            "minute": 45,
+            "event": "order_service_timeout_spike",
+            "impact": "20% requests timeout",
+            "duration_minutes": 10
+          },
+          {
+            "minute": 60,
+            "event": "full_recovery",
+            "impact": "all services normal",
+            "duration_minutes": 30
+          }
+        ]
+      }
+    },
+
+    "rl_specific_metrics": {
+      "state_features_to_track": [
+        "service_response_times_last_60s",
+        "error_rates_per_service_last_60s",
+        "concurrent_requests_per_service",
+        "queue_depths_per_service",
+        "cpu_memory_utilization_per_service",
+        "successful_routing_decisions_last_60s",
+        "failed_routing_decisions_last_60s",
+        "load_distribution_variance",
+        "service_health_scores",
+        "traffic_pattern_classification"
+      ],
+      
+      "action_space": [
+        "route_to_least_loaded_instance",
+        "route_to_fastest_responding_instance", 
+        "route_round_robin",
+        "route_weighted_by_capacity",
+        "route_with_circuit_breaker",
+        "route_with_backpressure_awareness",
+        "route_with_predictive_scaling"
+      ],
+      
+      "reward_functions": [
+        "minimize_average_response_time",
+        "minimize_error_rate",
+        "maximize_throughput",
+        "balance_load_distribution",
+        "minimize_resource_waste",
+        "maximize_user_satisfaction"
+      ],
+      
+      "collection_intervals": {
+        "high_frequency_metrics": 1,
+        "medium_frequency_metrics": 5,
+        "low_frequency_metrics": 30
+      }
+    },
+
+    "advanced_user_behaviors": {
+      "aggressive_buyer": {
+        "description": "High-speed purchasing with minimal browsing",
+        "session_duration_range": [1, 3],
+        "think_time_range": [0.1, 0.5],
+        "action_probabilities": {
+          "browse": 0.2,
+          "search": 0.1,
+          "cart": 0.4,
+          "order": 0.3
+        },
+        "conversion_rate": 0.8,
+        "pages_per_session": [2, 5],
+        "cart_abandonment_rate": 0.1,
+        "average_cart_size": [1, 2]
+      },
+      
+      "window_shopper": {
+        "description": "Extensive browsing with very low conversion",
+        "session_duration_range": [15, 30],
+        "think_time_range": [2.0, 5.0],
+        "action_probabilities": {
+          "browse": 0.8,
+          "search": 0.15,
+          "cart": 0.04,
+          "order": 0.01
+        },
+        "conversion_rate": 0.02,
+        "pages_per_session": [20, 50],
+        "cart_abandonment_rate": 0.95,
+        "average_cart_size": [1, 1]
+      },
+      
+      "enterprise_buyer": {
+        "description": "Large volume business purchases",
+        "session_duration_range": [20, 45],
+        "think_time_range": [1.0, 3.0],
+        "action_probabilities": {
+          "browse": 0.3,
+          "search": 0.2,
+          "cart": 0.4,
+          "order": 0.1
+        },
+        "conversion_rate": 0.7,
+        "pages_per_session": [15, 30],
+        "cart_abandonment_rate": 0.15,
+        "average_cart_size": [10, 50]
+      },
+      
+      "mobile_user": {
+        "description": "Quick mobile sessions with higher error tolerance",
+        "session_duration_range": [2, 8],
+        "think_time_range": [0.5, 2.0],
+        "action_probabilities": {
+          "browse": 0.6,
+          "search": 0.2,
+          "cart": 0.15,
+          "order": 0.05
+        },
+        "conversion_rate": 0.15,
+        "pages_per_session": [3, 10],
+        "cart_abandonment_rate": 0.6,
+        "average_cart_size": [1, 3]
+      }
+    },
+
+    "load_balancer_test_scenarios": {
+      "routing_algorithm_comparison": {
+        "description": "Compare different routing algorithms under identical load",
+        "algorithms_to_test": [
+          "round_robin",
+          "least_connections", 
+          "weighted_response_time",
+          "resource_aware",
+          "ml_based_routing"
+        ],
+        "test_duration_per_algorithm": 15,
+        "concurrent_users": 50,
+        "identical_traffic_pattern": {
+          "user_behavior_distribution": {
+            "careful_shoppers": 0.5,
+            "quick_browsers": 0.3,
+            "impulse_buyers": 0.2
+          },
+          "scenario_weights": {
+            "browse_weight": 40,
+            "search_weight": 20,
+            "cart_weight": 25,
+            "order_weight": 15
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,116 @@
+service:
+  name: ${spring.application.name}
+  host: ${SERVICE_HOST:localhost}
+  registration:
+    ttl: 30
+
+spring:
+  application:
+    name: inventory-service
+  cache:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+  cache:
+    redis:
+      time-to-live: 600000
+      cache-null-values: false
+    type: redis
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 1
+    consumer:
+      group-id: inventory-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      properties:
+        spring.json.trusted.packages: "com.bits.inventory.event"
+
+jwt:
+  secret: ${JWT_SECRET:mySecretKey123456789012345678901234567890}
+  expiration: ${JWT_EXPIRATION:86400000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,caches
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+      environment: ${ENVIRONMENT:local}
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http:
+          server:
+            requests: true
+
+inventory:
+  reservation:
+    default-duration-minutes: 30
+    cleanup-interval-minutes: 5
+  cache:
+    inventory-ttl: 300
+    product-ttl: 600
+    reservation-ttl: 1800
+  alerts:
+    low-stock-threshold: 10
+    critical-stock-threshold: 5
+
+logging:
+  level:
+    com.bits.inventory: INFO
+    org.springframework.security: DEBUG
+    org.springframework.kafka: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/inventory-service.log
+    max-size: 10MB
+    max-history: 30
+
+server:
+  port: 8082
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 50
+
+logging:
+  level:
+    com.bits.inventory: DEBUG
+    org.springframework.data.mongodb.core.MongoTemplate: DEBUG
+
+

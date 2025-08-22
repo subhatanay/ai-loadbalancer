@@ -1,0 +1,67 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: load-balancer
+  cache:
+    type: none
+    # redis:
+    #   time-to-live: 30s
+    #   cache-null-values: false
+  data:
+    redis:
+      host: ${REDIS_HOST:redis-service}
+      port: 6379
+      database: 0
+      timeout: 2000ms
+      jedis:
+        pool:
+          max-active: 20
+          max-idle: 8
+          min-idle: 2
+          max-wait: 2000ms
+          time-between-eviction-runs: 30s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http:
+          server:
+            requests: true
+logging:
+  level:
+    com.bits.loadbalancer: DEBUG
+    org.springframework.web: INFO
+
+loadbalancer:
+  routing-strategy: rl-based
+
+rl:
+  models:
+    enabled: false  # Disabled - using RL API instead
+    path: models/
+  decision:
+    api:
+      url: ${RL_API_URL:http://localhost:8088}
+    timeout: 50
+  fallback:
+    enabled: true
+
+collector:
+  endpoint-url: ${RL_COLLECTOR_URL:http://rl-experience-collector.ai-loadbalancer.svc.cluster.local:8081}
+  reward-scale: 1.0
+
+prometheus:
+  base-url: ${PROMETHEUS_URL:http://prometheus-service:9090}
+  job-name: kubernetes-pods
+  namespace: ai-loadbalancer
+  metrics-time-range: 30s

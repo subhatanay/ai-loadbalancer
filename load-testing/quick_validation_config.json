@@ -1,0 +1,85 @@
+{
+  "rl_training_scenarios": {
+    "base_config": {
+      "base_url": "http://localhost:8080/proxy",
+      "request_timeout": 10,
+      "retry_attempts": 2,
+      "retry_delay": 1.0
+    },
+    "training_scenarios": {
+      "quick_validation": {
+        "description": "Quick validation test",
+        "total_users": 10,
+        "test_duration_minutes": 2,
+        "max_concurrent_users": 5,
+        "ramp_up_time_seconds": 30,
+        "traffic_patterns": [
+          {
+            "name": "validation_pattern",
+            "start_minute": 0,
+            "duration_minutes": 2,
+            "intensity": "low",
+            "concurrent_users": 5,
+            "user_behavior_distribution": {
+              "quick_browsers": 1.0
+            },
+            "scenario_weights": {
+              "browse_weight": 80,
+              "cart_weight": 15,
+              "order_weight": 5
+            },
+            "service_load_characteristics": {
+              "user_service_load": "low",
+              "inventory_service_load": "low",
+              "cart_service_load": "low",
+              "order_service_load": "low"
+            }
+          }
+        ]
+      }
+    },
+    "user_behavior_profiles": {
+      "quick_browsers": {
+        "description": "Fast validation browsing",
+        "session_duration_range": [
+          1,
+          2
+        ],
+        "think_time_range": [
+          0.5,
+          1.0
+        ],
+        "action_probabilities": {
+          "browse": 0.8,
+          "cart": 0.15,
+          "order": 0.05
+        },
+        "conversion_rate": 0.1,
+        "pages_per_session": [
+          2,
+          4
+        ],
+        "cart_abandonment_rate": 0.8
+      }
+    },
+    "enhanced_test_products": [
+      {
+        "sku": "LAPTOP-001",
+        "name": "Test Laptop",
+        "category": "Electronics",
+        "price": 999.99,
+        "image": "https://example.com/laptop.jpg",
+        "popularity_score": 0.9
+      }
+    ],
+    "realistic_shipping_addresses": [
+      {
+        "street": "123 Test St",
+        "city": "Test City",
+        "state": "TS",
+        "zipCode": "12345",
+        "country": "US"
+      }
+    ]
+  }
+}
