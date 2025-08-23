@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rl-decision-api
+  namespace: ai-loadbalancer
+  labels:
+    app: rl-decision-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rl-decision-api
+  template:
+    metadata:
+      labels:
+        app: rl-decision-api
+      annotations:
+        # Prometheus scraping annotations
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8088"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: rl-decision-api
+        image: rl-decision-api:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8088
+          name: http
+        env:
+        - name: PROMETHEUS_HOST
+          value: "prometheus-service.ai-loadbalancer.svc.cluster.local"
+        - name: PROMETHEUS_PORT
+          value: "9090"
+        - name: LOADBALANCER_HOST
+          value: "ai-loadbalancer-service.ai-loadbalancer.svc.cluster.local"
+        - name: LOADBALANCER_PORT
+          value: "8080"
+        - name: LOADBALANCER_API_PATH
+          value: "/api/services"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8088
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8088
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        volumeMounts:
+        - name: rl-models
+          mountPath: /app/models
+        - name: rl-logs
+          mountPath: /app/logs
+      volumes:
+      - name: rl-models
+        hostPath:
+          path: /tmp/rl-models
+          type: DirectoryOrCreate
+      - name: rl-logs
+        hostPath:
+          path: /tmp/rl-logs
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rl-decision-api
+  namespace: ai-loadbalancer
+  labels:
+    app: rl-decision-api
+  annotations:
+    # Service-level Prometheus annotations
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8088"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8088
+    targetPort: 8088
+    protocol: TCP
+    name: http
+  selector:
+    app: rl-decision-api
+---
+# Optional: NodePort service for external access during development
+apiVersion: v1
+kind: Service
+metadata:
+  name: rl-decision-api-nodeport
+  namespace: ai-loadbalancer
+  labels:
+    app: rl-decision-api
+spec:
+  type: NodePort
+  ports:
+  - port: 8088
+    targetPort: 8088
+    nodePort: 30088
+    protocol: TCP
+    name: http
+  selector:
+    app: rl-decision-api

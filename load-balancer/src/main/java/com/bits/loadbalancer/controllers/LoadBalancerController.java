@@ -1,7 +1,9 @@
 package com.bits.loadbalancer.controllers;
 
 import com.bits.commomutil.models.ServiceInfo;
+import com.bits.loadbalancer.metrics.LoadBalancerMetrics;
 import com.bits.loadbalancer.services.RoutingStrategyAlgorithm;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,12 +29,14 @@ public class LoadBalancerController {
     @Autowired
     private RoutingStrategyAlgorithm routingStrategyAlgorithm;
 
-
     @Autowired
     private RestTemplate restTemplate ;
 
     @Autowired
     private ObjectMapper objectMapper;
+    
+    @Autowired
+    private LoadBalancerMetrics loadBalancerMetrics;
 
     @RequestMapping(value = "/{serviceName}/**", method = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE})
     public ResponseEntity<?> proxyRequest(
@@ -42,20 +46,29 @@ public class LoadBalancerController {
         
         logger.info("Proxying request to service: {}", serviceName);
 
-        // Get next healthy instance
-        ServiceInfo targetInstance = routingStrategyAlgorithm.getLoadbalancer().geNextServiceInstance(serviceName);
-
-        if (targetInstance == null) {
-            Map<String, String> error = new HashMap<>();
-            error.put("error", "No healthy instances available for service: " + serviceName);
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);
-        }
-        
-        // CRITICAL: Set chosen instance BEFORE processing for RL experience logging
-        request.setAttribute("chosenPodInstance", targetInstance.getInstanceName());
-        logger.info("Selected instance {} for service {}", targetInstance.getInstanceName(), serviceName);
+        // Start metrics collection for proxy request
+        Timer.Sample proxyRequestSample = loadBalancerMetrics.startProxyRequest();
+        long startTime = System.currentTimeMillis();
+        ServiceInfo targetInstance = null;
         
         try {
+            // Get next healthy instance
+            targetInstance = routingStrategyAlgorithm.getLoadbalancer().geNextServiceInstance(serviceName);
+
+            if (targetInstance == null) {
+                loadBalancerMetrics.recordProxyError(serviceName, "no_healthy_instances", "503");
+                Map<String, String> error = new HashMap<>();
+                error.put("error", "No healthy instances available for service: " + serviceName);
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);
+            }
+            
+            // CRITICAL: Set chosen instance BEFORE processing for RL experience logging
+            request.setAttribute("chosenPodInstance", targetInstance.getInstanceName());
+            logger.info("Selected instance {} for service {}", targetInstance.getInstanceName(), serviceName);
+            
+            // Record pod request metrics
+            loadBalancerMetrics.recordPodRequest(serviceName, targetInstance.getInstanceName());
+            
             // Build URI properly to avoid encoding issues
             URI targetUri = buildTargetUri(request, serviceName, targetInstance);
             logger.info("Forwarding request to: {}", targetUri);
@@ -68,14 +81,27 @@ public class LoadBalancerController {
             
             // Forward the request with proper URI
             HttpMethod method = HttpMethod.valueOf(request.getMethod());
-            logger.info("******************** HTTP REQUEST {}, HTTP Method: {} *********************", request, method);
+            logger.debug("******************** HTTP REQUEST {}, HTTP Method: {} *********************", request, method);
 
             // Use String.class to avoid chunked encoding issues with Object.class
             ResponseEntity<String> response = restTemplate.exchange(
                     targetUri, method, entity, String.class);
 
-            logger.info("Request forwarded successfully to {} - Status: {}",
-                    targetUri, response.getStatusCode());
+            long responseTime = System.currentTimeMillis() - startTime;
+            
+            logger.info("Request forwarded successfully to {} - Status: {}, ResponseTime: {}ms",
+                    targetUri, response.getStatusCode(), responseTime);
+
+            // Record pod response metrics
+            loadBalancerMetrics.recordPodResponse(serviceName, targetInstance.getInstanceName(), 
+                    responseTime, response.getStatusCode().value());
+
+            // Provide feedback to RL agent for learning
+            provideFeedbackToRLAgent(serviceName, targetInstance.getInstanceName(), 
+                                   responseTime, response.getStatusCode().value());
+
+            // Record successful proxy request metrics
+            loadBalancerMetrics.recordProxyRequest(proxyRequestSample, serviceName, "success");
 
             // Parse response body as JSON if possible, otherwise return as string
             Object responseBody = parseResponseBody(response.getBody());
@@ -85,10 +111,51 @@ public class LoadBalancerController {
                     .body(responseBody);
 
         } catch (Exception e) {
+            long responseTime = System.currentTimeMillis() - startTime;
             logger.error("Error forwarding request: {}", e.getMessage(), e);
+            
+            // Record pod response error metrics only if we have a target instance
+            if (targetInstance != null) {
+                loadBalancerMetrics.recordPodResponse(serviceName, targetInstance.getInstanceName(), 
+                        responseTime, 502);
+                
+                // Provide negative feedback to RL agent for failed requests
+                provideFeedbackToRLAgent(serviceName, targetInstance.getInstanceName(), 
+                                       responseTime, 502); // BAD_GATEWAY
+            }
+            
+            // Record proxy error metrics
+            loadBalancerMetrics.recordProxyError(serviceName, "request_forwarding_failed", "502");
+            
             Map<String, String> error = new HashMap<>();
             error.put("error", "Failed to forward request: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(error);
+        }
+    }
+    
+    /**
+     * Provide feedback to RL agent about routing outcome
+     */
+    private void provideFeedbackToRLAgent(String serviceName, String selectedPod, long responseTimeMs, int statusCode) {
+        try {
+            // Check if using RL-based load balancer
+            if (routingStrategyAlgorithm.getLoadbalancer() instanceof com.bits.loadbalancer.services.RLApiLoadBalancer) {
+                com.bits.loadbalancer.services.RLApiLoadBalancer rlLoadBalancer = 
+                    (com.bits.loadbalancer.services.RLApiLoadBalancer) routingStrategyAlgorithm.getLoadbalancer();
+                
+                boolean errorOccurred = statusCode >= 400;
+                rlLoadBalancer.provideFeedback(serviceName, selectedPod, responseTimeMs, statusCode, errorOccurred);
+                
+                // Record feedback metrics
+                loadBalancerMetrics.recordFeedbackSent(serviceName, selectedPod, responseTimeMs);
+                
+                logger.debug("RL feedback provided: {} -> {} ({}ms, status: {}, error: {})", 
+                           serviceName, selectedPod, responseTimeMs, statusCode, errorOccurred);
+            }
+        } catch (Exception e) {
+            // Record feedback failure metrics
+            loadBalancerMetrics.recordFeedbackFailed(serviceName, selectedPod, e.getClass().getSimpleName());
+            logger.debug("Failed to provide RL feedback (non-critical): {}", e.getMessage());
         }
     }
     
@@ -133,6 +200,7 @@ private URI buildTargetUri(HttpServletRequest request, String serviceName, Servi
         throw new IllegalArgumentException("Invalid URL construction", e);
     }
 }
+
 private String extractPathAfterServiceName(String requestUri, String serviceName) {
     String prefix = "/proxy/" + serviceName;
     
@@ -155,6 +223,7 @@ private String extractPathAfterServiceName(String requestUri, String serviceName
     // Default to root path
     return "/";
 }
+
 private HttpHeaders copyHeaders(HttpServletRequest request) {
     HttpHeaders headers = new HttpHeaders();
     

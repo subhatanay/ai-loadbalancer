@@ -6,8 +6,12 @@ import org.springframework.stereotype.Component;
 @Component
 @ConfigurationProperties(prefix = "collector")
 public class CollectorProperties {
+    private boolean enabled = false;  // Default to disabled
     private String endpointUrl;
     private double rewardScale;
+
+    public boolean isEnabled() { return enabled; }
+    public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
     public String getEndpointUrl() { return endpointUrl; }
     public void setEndpointUrl(String endpointUrl) { this.endpointUrl = endpointUrl; }

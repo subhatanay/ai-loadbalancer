@@ -2,7 +2,9 @@ package com.bits.loadbalancer.services;
 
 import com.bits.commomutil.models.ServiceInfo;
 import com.bits.loadbalancer.dao.ServiceRegistry;
+import com.bits.loadbalancer.metrics.LoadBalancerMetrics;
 import com.bits.loadbalancer.model.Service;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +23,7 @@ public class RLApiLoadBalancer implements Loadbalancer {
     private final RLDecisionClient rlDecisionClient;
     private final RoundRobinBasedLoadbalancer fallbackLoadbalancer;
     private final ServiceRegistry serviceRegistry;
+    private final LoadBalancerMetrics loadBalancerMetrics;
     
     // Statistics
     private volatile int totalDecisions = 0;
@@ -31,10 +34,12 @@ public class RLApiLoadBalancer implements Loadbalancer {
     @Autowired
     public RLApiLoadBalancer(RLDecisionClient rlDecisionClient,
                             RoundRobinBasedLoadbalancer fallbackLoadbalancer,
-                            ServiceRegistry serviceRegistry) {
+                            ServiceRegistry serviceRegistry,
+                            LoadBalancerMetrics loadBalancerMetrics) {
         this.rlDecisionClient = rlDecisionClient;
         this.fallbackLoadbalancer = fallbackLoadbalancer;
         this.serviceRegistry = serviceRegistry;
+        this.loadBalancerMetrics = loadBalancerMetrics;
         
         // Start health monitoring
         startHealthMonitoring();
@@ -49,8 +54,12 @@ public class RLApiLoadBalancer implements Loadbalancer {
         // Check if RL API is healthy
         if (!rlApiHealthy) {
             logger.debug("RL API unhealthy, using fallback for service: {}", serviceName);
+            loadBalancerMetrics.recordRLFallback(serviceName, "rl_api_unhealthy");
             return useFallback(serviceName);
         }
+        
+        // Start RL decision timing
+        Timer.Sample rlDecisionSample = loadBalancerMetrics.startRLDecision();
         
         try {
             // Get RL decision with timeout
@@ -65,16 +74,26 @@ public class RLApiLoadBalancer implements Loadbalancer {
                 
                 if (selectedService != null) {
                     rlDecisions++;
+                    
+                    // Record successful RL decision metrics
+                    loadBalancerMetrics.recordRLDecision(rlDecisionSample, serviceName, 
+                            decision.decisionType != null ? decision.decisionType : "rl_decision", 
+                            decision.confidence);
+                    
                     logger.debug("RL decision: {} -> {} (confidence: {:.2f}, type: {})", 
                         serviceName, decision.selectedPod, decision.confidence, decision.decisionType);
                     return selectedService;
                 } else {
                     logger.warn("RL selected pod {} not found for service {}", decision.selectedPod, serviceName);
+                    loadBalancerMetrics.recordRLFallback(serviceName, "selected_pod_not_found");
                 }
+            } else {
+                loadBalancerMetrics.recordRLFallback(serviceName, "no_decision_returned");
             }
             
         } catch (Exception e) {
             logger.warn("RL decision failed for service {}: {}", serviceName, e.getMessage());
+            loadBalancerMetrics.recordRLFallback(serviceName, "rl_decision_exception");
         }
         
         // Fallback to round-robin
@@ -138,16 +157,27 @@ public class RLApiLoadBalancer implements Loadbalancer {
         new Thread(() -> {
             while (true) {
                 try {
+                    boolean previousHealth = rlApiHealthy;
                     rlApiHealthy = rlDecisionClient.isHealthy()
                             .onErrorReturn(false)
                             .block();
+                    
+                    // Update health metrics when status changes
+                    if (previousHealth != rlApiHealthy) {
+                        loadBalancerMetrics.updateRLAgentHealth(rlApiHealthy);
+                        logger.info("RL Agent health status changed: {}", rlApiHealthy ? "HEALTHY" : "UNHEALTHY");
+                    }
                     
                     Thread.sleep(5000);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     break;
                 } catch (Exception e) {
-                    rlApiHealthy = false;
+                    if (rlApiHealthy) {
+                        rlApiHealthy = false;
+                        loadBalancerMetrics.updateRLAgentHealth(false);
+                        logger.warn("RL Agent health check failed, marking as unhealthy");
+                    }
                 }
             }
         }).start();

@@ -98,7 +98,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "system_cpu_usage{job=\"inventory-service\"} * 100",
+          "expr": "system_cpu_usage{service_name=\"inventory-service\"} * 100",
           "legendFormat": "",
           "refId": "A"
         }
@@ -169,7 +169,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "clamp_min(jvm_memory_used_bytes{job=\"inventory-service\",area=\"heap\"} / jvm_memory_max_bytes{job=\"inventory-service\",area=\"heap\"} * 100, 0)",
+          "expr": "clamp_min(jvm_memory_used_bytes{service_name=\"inventory-service\",area=\"heap\"} / jvm_memory_max_bytes{service_name=\"inventory-service\",area=\"heap\"} * 100, 0)",
           "legendFormat": "",
           "refId": "A"
         }
@@ -240,7 +240,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "jvm_memory_used_bytes{job=\"inventory-service\",area=\"heap\"}",
+          "expr": "jvm_memory_used_bytes{service_name=\"inventory-service\",area=\"heap\"}",
           "legendFormat": "",
           "refId": "A"
         }
@@ -303,7 +303,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "process_uptime_seconds{job=\"inventory-service\"}",
+          "expr": "process_uptime_seconds{service_name=\"inventory-service\"}",
           "legendFormat": "",
           "refId": "A"
         }
@@ -374,7 +374,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(http_server_requests_seconds_count{job=\"inventory-service\",status=~\"[4-5].*\"}[5m]) / rate(http_server_requests_seconds_count{job=\"inventory-service\"}[5m]) * 100",
+          "expr": "rate(http_server_requests_seconds_count{service_name=\"inventory-service\",status=~\"[4-5].*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"inventory-service\"}[5m]) * 100",
           "legendFormat": "",
           "refId": "A"
         }
@@ -445,7 +445,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(http_server_requests_seconds_count{job=\"inventory-service\"}[5m]))",
+          "expr": "sum(rate(http_server_requests_seconds_count{service_name=\"inventory-service\"}[5m]))",
           "legendFormat": "",
           "refId": "A"
         }
@@ -546,7 +546,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "system_cpu_usage{job=\"inventory-service\"} * 100",
+          "expr": "system_cpu_usage{service_name=\"inventory-service\"} * 100",
           "legendFormat": "System CPU Usage",
           "refId": "A"
         },
@@ -555,7 +555,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "process_cpu_usage{job=\"inventory-service\"} * 100",
+          "expr": "process_cpu_usage{service_name=\"inventory-service\"} * 100",
           "legendFormat": "Process CPU Usage",
           "refId": "B"
         }
@@ -648,7 +648,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "clamp_min(jvm_memory_used_bytes{job=\"inventory-service\",area=\"heap\"} / jvm_memory_max_bytes{job=\"inventory-service\",area=\"heap\"} * 100, 0)",
+          "expr": "clamp_min(jvm_memory_used_bytes{service_name=\"inventory-service\",area=\"heap\"} / jvm_memory_max_bytes{service_name=\"inventory-service\",area=\"heap\"} * 100, 0)",
           "legendFormat": "Heap Usage %",
           "refId": "A"
         }
@@ -749,7 +749,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(1 - (disk_free_bytes{job=\"inventory-service\"} / disk_total_bytes{job=\"inventory-service\"})) * 100",
+          "expr": "(1 - (disk_free_bytes{service_name=\"inventory-service\"} / disk_total_bytes{service_name=\"inventory-service\"})) * 100",
           "legendFormat": "Disk Usage %",
           "refId": "A"
         }
@@ -812,7 +812,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(http_server_requests_seconds_count{job=\"inventory-service\",status=~\"2..\"}[1h]))",
+          "expr": "sum(increase(http_server_requests_seconds_count{service_name=\"inventory-service\",status=~\"2..\"}[1h]))",
           "legendFormat": "",
           "refId": "A"
         }
@@ -875,7 +875,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(http_server_requests_seconds_count{job=\"inventory-service\",status=~\"4..\"}[1h]))",
+          "expr": "sum(increase(http_server_requests_seconds_count{service_name=\"inventory-service\",status=~\"4..\"}[1h]))",
           "legendFormat": "",
           "refId": "A"
         }
@@ -938,7 +938,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(http_server_requests_seconds_count{job=\"inventory-service\",status=~\"5..\"}[1h]))",
+          "expr": "sum(increase(http_server_requests_seconds_count{service_name=\"inventory-service\",status=~\"5..\"}[1h]))",
           "legendFormat": "",
           "refId": "A"
         }
@@ -1031,7 +1031,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (status) (rate(http_server_requests_seconds_count{job=\"inventory-service\"}[5m]))",
+          "expr": "sum by (status) (rate(http_server_requests_seconds_count{service_name=\"inventory-service\"}[5m]))",
           "legendFormat": "{{status}}",
           "refId": "A"
         }
@@ -1137,7 +1137,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(http_server_requests_seconds_count{job=\"inventory-service\",uri!~\"/actuator.*\"}[5m])",
+          "expr": "rate(http_server_requests_seconds_count{service_name=\"inventory-service\",uri!~\"/actuator.*\"}[5m])",
           "legendFormat": "{{method}} {{uri}}",
           "refId": "A"
         }
@@ -1230,7 +1230,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(http_server_requests_seconds_sum{job=\"inventory-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{job=\"inventory-service\",uri!~\"/actuator.*\"}[5m]) * 1000",
+          "expr": "rate(http_server_requests_seconds_sum{service_name=\"inventory-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"inventory-service\",uri!~\"/actuator.*\"}[5m]) * 1000",
           "legendFormat": "Avg {{uri}}",
           "refId": "A"
         }
@@ -1246,9 +1246,9 @@
         "x": 0,
         "y": 26
       },
-      "id": 15,
+      "id": 16,
       "panels": [],
-      "title": "⚡ JVM Performance Metrics",
+      "title": "🎯 Request Load Distribution",
       "type": "row"
     },
     {
@@ -1262,66 +1262,41 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
-              "vis": false,
               "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
             }
           },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "bytes"
+          "unit": "percent"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
+        "w": 12,
         "x": 0,
         "y": 27
       },
-      "id": 16,
+      "id": 17,
       "options": {
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
         "legend": {
-          "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
           "showLegend": true
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
         },
         "tooltip": {
           "hideZeros": false,
@@ -1336,13 +1311,13 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "jvm_memory_used_bytes{job=\"inventory-service\"}",
-          "legendFormat": "{{area}} {{id}}",
+          "expr": "sum by (uri) (rate(http_server_requests_seconds_count{service_name=\"inventory-service\",uri!~\"/actuator.*\"}[5m]))",
+          "legendFormat": "{{uri}}",
           "refId": "A"
         }
       ],
-      "title": "JVM Memory Usage by Area",
-      "type": "timeseries"
+      "title": "Request Load Distribution %",
+      "type": "piechart"
     },
     {
       "datasource": {
@@ -1404,110 +1379,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 27
-      },
-      "id": 17,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "12.2.0-16818804881",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "jvm_threads_live_threads{job=\"inventory-service\"}",
-          "legendFormat": "Live Threads",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "jvm_threads_daemon_threads{job=\"inventory-service\"}",
-          "legendFormat": "Daemon Threads",
-          "refId": "B"
-        }
-      ],
-      "title": "JVM Thread Count",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "vis": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 2,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
+        "w": 12,
+        "x": 12,
         "y": 27
       },
       "id": 18,
@@ -1531,12 +1404,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(jvm_gc_pause_seconds_sum{job=\"inventory-service\"}[5m])",
-          "legendFormat": "{{gc}} {{action}}",
+          "expr": "sum by (uri) (increase(http_server_requests_seconds_count{service_name=\"inventory-service\",uri!~\"/actuator.*\"}[1h]))",
+          "legendFormat": "{{uri}}",
           "refId": "A"
         }
       ],
-      "title": "Garbage Collection Time",
+      "title": "Request Count by Endpoint (1h)",
       "type": "timeseries"
     }
   ],

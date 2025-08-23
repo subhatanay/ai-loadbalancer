@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Configuration toggles
+ENABLE_RL_COLLECTOR=false  # Set to true to enable RL-collector deployment
+
 # Create Kind cluster
 echo "Creating Kind cluster..."
 kind create cluster --name ai-loadbalancer-cluster
@@ -13,7 +16,11 @@ kind load docker-image inventory-service:latest --name ai-loadbalancer-cluster
 kind load docker-image payment-service:latest --name ai-loadbalancer-cluster
 kind load docker-image notification-service:latest --name ai-loadbalancer-cluster
 kind load docker-image load-balancer:latest --name ai-loadbalancer-cluster
-kind load docker-image rl-experience-collector:latest --name ai-loadbalancer-cluster
+# Conditionally load RL-collector image
+if [ "$ENABLE_RL_COLLECTOR" = true ]; then
+  echo "Loading RL-collector image..."
+  kind load docker-image rl-experience-collector:latest --name ai-loadbalancer-cluster
+fi
 kind load docker-image subhajgh/ai-loadbalancer-rl-agent --name ai-loadbalancer-cluster
 
 # Apply Kubernetes manifests
@@ -35,7 +42,13 @@ kubectl apply -f config-yaml/cluster-role.yaml
 kubectl apply -f config-yaml/prometheus-rbac.yaml
 kubectl apply -f config-yaml/prometheus.yaml
 kubectl apply -f config-yaml/grafana.yaml
-kubectl apply -f config-yaml/rl-collector.yaml
+# Conditionally apply RL-collector deployment
+if [ "$ENABLE_RL_COLLECTOR" = true ]; then
+  echo "Deploying RL-collector..."
+  kubectl apply -f config-yaml/rl-collector.yaml
+else
+  echo "RL-collector deployment DISABLED (toggle: ENABLE_RL_COLLECTOR=false)"
+fi
 kubectl apply -f config-yaml/ai-loadbalancer.yaml
 
 # Wait for deployments to be ready

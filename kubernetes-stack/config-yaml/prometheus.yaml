@@ -87,6 +87,14 @@ data:
           - targets: ['rl-experience-collector.ai-loadbalancer.svc.cluster.local:8087']
         metrics_path: '/metrics'
 
+      # RL Decision API - AI Model Performance Metrics (Sidecar in ai-loadbalancer)
+      - job_name: 'rl-decision-api'
+        static_configs:
+          - targets: ['ai-loadbalancer-service.ai-loadbalancer.svc.cluster.local:8088']
+        metrics_path: '/metrics'
+        scrape_interval: 15s
+        scrape_timeout: 10s
+
 ---
 apiVersion: apps/v1
 kind: Deployment

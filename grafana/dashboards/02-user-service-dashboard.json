@@ -98,7 +98,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "system_cpu_usage{job=\"user-service\"} * 100",
+          "expr": "system_cpu_usage{service_name=\"user-service\"} * 100",
           "legendFormat": "",
           "refId": "A"
         }
@@ -169,7 +169,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "clamp_min(jvm_memory_used_bytes{job=\"user-service\",area=\"heap\"} / jvm_memory_max_bytes{job=\"user-service\",area=\"heap\"} * 100, 0)",
+          "expr": "clamp_min(jvm_memory_used_bytes{service_name=\"user-service\",area=\"heap\"} / jvm_memory_max_bytes{service_name=\"user-service\",area=\"heap\"} * 100, 0)",
           "legendFormat": "",
           "refId": "A"
         }
@@ -240,7 +240,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "jvm_memory_used_bytes{job=\"user-service\",area=\"heap\"}",
+          "expr": "jvm_memory_used_bytes{service_name=\"user-service\",area=\"heap\"}",
           "legendFormat": "",
           "refId": "A"
         }
@@ -303,7 +303,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "process_uptime_seconds{job=\"user-service\"}",
+          "expr": "process_uptime_seconds{service_name=\"user-service\"}",
           "legendFormat": "",
           "refId": "A"
         }
@@ -374,7 +374,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(http_server_requests_seconds_count{job=\"user-service\",status=~\"[4-5].*\"}[5m]) / rate(http_server_requests_seconds_count{job=\"user-service\"}[5m]) * 100",
+          "expr": "rate(http_server_requests_seconds_count{service_name=\"user-service\",status=~\"[4-5].*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"user-service\"}[5m]) * 100",
           "legendFormat": "",
           "refId": "A"
         }
@@ -445,7 +445,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(http_server_requests_seconds_count{job=\"user-service\"}[5m]))",
+          "expr": "sum(rate(http_server_requests_seconds_count{service_name=\"user-service\"}[5m]))",
           "legendFormat": "",
           "refId": "A"
         }
@@ -546,7 +546,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "system_cpu_usage{job=\"user-service\"} * 100",
+          "expr": "system_cpu_usage{service_name=\"user-service\"} * 100",
           "legendFormat": "System CPU Usage",
           "refId": "A"
         },
@@ -555,7 +555,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "process_cpu_usage{job=\"user-service\"} * 100",
+          "expr": "process_cpu_usage{service_name=\"user-service\"} * 100",
           "legendFormat": "Process CPU Usage",
           "refId": "B"
         }
@@ -648,7 +648,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "clamp_min(jvm_memory_used_bytes{job=\"user-service\",area=\"heap\"} / jvm_memory_max_bytes{job=\"user-service\",area=\"heap\"} * 100, 0)",
+          "expr": "clamp_min(jvm_memory_used_bytes{service_name=\"user-service\",area=\"heap\"} / jvm_memory_max_bytes{service_name=\"user-service\",area=\"heap\"} * 100, 0)",
           "legendFormat": "Heap Usage %",
           "refId": "A"
         }
@@ -749,7 +749,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(1 - (disk_free_bytes{job=\"user-service\"} / disk_total_bytes{job=\"user-service\"})) * 100",
+          "expr": "(1 - (disk_free_bytes{service_name=\"user-service\"} / disk_total_bytes{service_name=\"user-service\"})) * 100",
           "legendFormat": "Disk Usage %",
           "refId": "A"
         }
@@ -812,7 +812,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(http_server_requests_seconds_count{job=\"user-service\",status=~\"2..\"}[1h]))",
+          "expr": "sum(increase(http_server_requests_seconds_count{service_name=\"user-service\",status=~\"2..\"}[1h]))",
           "legendFormat": "",
           "refId": "A"
         }
@@ -875,7 +875,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(http_server_requests_seconds_count{job=\"user-service\",status=~\"4..\"}[1h]))",
+          "expr": "sum(increase(http_server_requests_seconds_count{service_name=\"user-service\",status=~\"4..\"}[1h]))",
           "legendFormat": "",
           "refId": "A"
         }
@@ -938,7 +938,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(http_server_requests_seconds_count{job=\"user-service\",status=~\"5..\"}[1h]))",
+          "expr": "sum(increase(http_server_requests_seconds_count{service_name=\"user-service\",status=~\"5..\"}[1h]))",
           "legendFormat": "",
           "refId": "A"
         }
@@ -1031,7 +1031,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (status) (rate(http_server_requests_seconds_count{job=\"user-service\"}[5m]))",
+          "expr": "sum by (status) (rate(http_server_requests_seconds_count{service_name=\"user-service\"}[5m]))",
           "legendFormat": "{{status}}",
           "refId": "A"
         }
@@ -1137,7 +1137,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(http_server_requests_seconds_count{job=\"user-service\",uri!~\"/actuator.*\"}[5m])",
+          "expr": "rate(http_server_requests_seconds_count{service_name=\"user-service\",uri!~\"/actuator.*\"}[5m])",
           "legendFormat": "{{method}} {{uri}}",
           "refId": "A"
         }
@@ -1230,7 +1230,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(http_server_requests_seconds_sum{job=\"user-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{job=\"user-service\",uri!~\"/actuator.*\"}[5m]) * 1000",
+          "expr": "rate(http_server_requests_seconds_sum{service_name=\"user-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"user-service\",uri!~\"/actuator.*\"}[5m]) * 1000",
           "legendFormat": "Avg {{uri}}",
           "refId": "A"
         }
@@ -1306,8 +1306,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (kubernetes_pod_name) (rate(http_server_requests_seconds_count{job=\"user-service\"}[5m]))",
-          "legendFormat": "{{kubernetes_pod_name}}",
+          "expr": "sum by (pod_name) (rate(http_server_requests_seconds_count{service_name=\"user-service\"}[5m]))",
+          "legendFormat": "{{pod_name}}",
           "refId": "A"
         }
       ],
@@ -1393,7 +1393,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (pod) (rate(http_server_requests_seconds_count{job=\"user-service\"}[5m]))",
+          "expr": "sum by (pod) (rate(http_server_requests_seconds_count{service_name=\"user-service\"}[5m]))",
           "legendFormat": "{{pod}}",
           "refId": "A"
         }
@@ -1493,8 +1493,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "system_cpu_usage{job=\"user-service\"} * 100",
-          "legendFormat": "{{kubernetes_pod_name}} - CPU",
+          "expr": "system_cpu_usage{service_name=\"user-service\"} * 100",
+          "legendFormat": "{{pod_name}} - CPU",
           "refId": "A"
         }
       ],
@@ -1585,8 +1585,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(http_server_requests_seconds_count{job=\"user-service\"}[5m])",
-          "legendFormat": "{{kubernetes_pod_name}} - {{method}} {{uri}}",
+          "expr": "rate(http_server_requests_seconds_count{service_name=\"user-service\"}[5m])",
+          "legendFormat": "{{pod_name}} - {{method}} {{uri}}",
           "refId": "A"
         }
       ],
@@ -1685,8 +1685,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(http_server_requests_seconds_sum{job=\"user-service\"}[5m]) / rate(http_server_requests_seconds_count{job=\"user-service\"}[5m]) * 1000",
-          "legendFormat": "{{kubernetes_pod_name}} - {{method}} {{uri}}",
+          "expr": "rate(http_server_requests_seconds_sum{service_name=\"user-service\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"user-service\"}[5m]) * 1000",
+          "legendFormat": "{{pod_name}} - {{method}} {{uri}}",
           "refId": "A"
         }
       ],
@@ -1791,7 +1791,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "jvm_memory_used_bytes{job=\"user-service\"}",
+          "expr": "jvm_memory_used_bytes{service_name=\"user-service\"}",
           "legendFormat": "{{area}} {{id}}",
           "refId": "A"
         }
@@ -1884,7 +1884,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "jvm_threads_live_threads{job=\"user-service\"}",
+          "expr": "jvm_threads_live_threads{service_name=\"user-service\"}",
           "legendFormat": "Live Threads",
           "refId": "A"
         },
@@ -1893,7 +1893,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "jvm_threads_daemon_threads{job=\"user-service\"}",
+          "expr": "jvm_threads_daemon_threads{service_name=\"user-service\"}",
           "legendFormat": "Daemon Threads",
           "refId": "B"
         }
@@ -1986,7 +1986,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(jvm_gc_pause_seconds_sum{job=\"user-service\"}[5m])",
+          "expr": "rate(jvm_gc_pause_seconds_sum{service_name=\"user-service\"}[5m])",
           "legendFormat": "{{gc}} {{action}}",
           "refId": "A"
         }

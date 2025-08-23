@@ -1,8 +1,11 @@
 package com.bits.loadbalancer.services;
 
+import com.bits.loadbalancer.metrics.LoadBalancerMetrics;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -23,9 +26,13 @@ public class RLDecisionClient {
     
     private final WebClient webClient;
     private final String rlApiBaseUrl;
+    private final LoadBalancerMetrics loadBalancerMetrics;
     
-    public RLDecisionClient(@Value("${rl.decision.api.url:http://localhost:8088}") String rlApiBaseUrl) {
+    @Autowired
+    public RLDecisionClient(@Value("${rl.decision.api.url:http://localhost:8088}") String rlApiBaseUrl,
+                           LoadBalancerMetrics loadBalancerMetrics) {
         this.rlApiBaseUrl = rlApiBaseUrl;
+        this.loadBalancerMetrics = loadBalancerMetrics;
         this.webClient = WebClient.builder()
                 .baseUrl(rlApiBaseUrl)
                 .build();
@@ -78,13 +85,19 @@ public class RLDecisionClient {
                 .bodyToMono(String.class)
                 .timeout(Duration.ofMillis(2000))
                 .subscribe(
-                    result -> logger.debug("Feedback SUCCESS: {} -> {} ({}ms)", serviceName, selectedPod, responseTimeMs),
+                    result -> {
+                        logger.debug("Feedback SUCCESS: {} -> {} ({}ms)", serviceName, selectedPod, responseTimeMs);
+                        // Record successful feedback metrics
+                        loadBalancerMetrics.recordFeedbackSent(serviceName, selectedPod, responseTimeMs);
+                    },
                     error -> {
                         logger.warn("Feedback FAILED for service: {}, URL: {}/feedback, Error: {}, Type: {}", 
                             serviceName, rlApiBaseUrl, error.getMessage(), error.getClass().getSimpleName());
                         if (error.getCause() != null) {
                             logger.warn("Feedback root cause: {}", error.getCause().getMessage());
                         }
+                        // Record failed feedback metrics
+                        loadBalancerMetrics.recordFeedbackFailed(serviceName, selectedPod, error.getClass().getSimpleName());
                     }
                 );
     }

@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import com.bits.commomutil.models.ServiceInfo;
 
 import com.bits.loadbalancer.clients.RLCollectorClient;
+import com.bits.loadbalancer.configuration.CollectorProperties;
 import com.bits.loadbalancer.dao.ServiceRegistry;
 import com.bits.loadbalancer.dto.RLExperience;
 import com.bits.loadbalancer.model.InstanceMetrics;
@@ -36,6 +37,9 @@ public class ExperienceLoggingInterceptor implements HandlerInterceptor {
     
     @Autowired(required = false) 
     private RLCollectorClient collectorClient;
+    
+    @Autowired
+    private CollectorProperties collectorProperties;
     
     
     @Autowired
@@ -145,11 +149,13 @@ public class ExperienceLoggingInterceptor implements HandlerInterceptor {
                     "timestamp", Instant.now().toString()
             ));
             
-            // Send to collector if available
-            if (collectorClient != null) {
+            // Send to collector if enabled and available
+            if (collectorProperties.isEnabled() && collectorClient != null) {
                 collectorClient.sendExperience(experience);
                 log.debug("RL experience sent to collector: {} -> {} (reward: {})", 
                         requestPath, chosenInstance, reward);
+            } else if (!collectorProperties.isEnabled()) {
+                log.debug("RL collector disabled - experience not sent to collector");
             }
             
         } catch (Exception e) {

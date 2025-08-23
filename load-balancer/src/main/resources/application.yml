@@ -37,9 +37,12 @@ management:
         http:
           server:
             requests: true
+    tags:
+      service_name: load-balancer
+      
 logging:
   level:
-    com.bits.loadbalancer: DEBUG
+    com.bits.loadbalancer: INFO
     org.springframework.web: INFO
 
 loadbalancer:
@@ -57,6 +60,7 @@ rl:
     enabled: true
 
 collector:
+  enabled: ${RL_COLLECTOR_ENABLED:false}  # Toggle to enable/disable RL-collector integration
   endpoint-url: ${RL_COLLECTOR_URL:http://rl-experience-collector.ai-loadbalancer.svc.cluster.local:8081}
   reward-scale: 1.0
 

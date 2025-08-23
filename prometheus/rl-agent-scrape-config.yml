@@ -1,0 +1,19 @@
+# RL Agent Prometheus Scrape Configuration
+# Add this to your prometheus.yml under scrape_configs
+
+- job_name: 'rl-agent'
+  static_configs:
+    - targets: ['localhost:8088']
+  metrics_path: '/metrics'
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  honor_labels: true
+  params:
+    format: ['prometheus']
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: instance
+      replacement: 'rl-agent'
+    - source_labels: [__address__]
+      target_label: service
+      replacement: 'rl-decision-api'
