@@ -74,14 +74,6 @@ data:
             replacement: $1-$2
             target_label: job
 
-      # Fallback static configs for services without pod annotations
-      - job_name: 'ai-loadbalancer-static'
-        static_configs:
-          - targets: ['ai-loadbalancer-service.ai-loadbalancer.svc.cluster.local:8080']
-        metrics_path: '/actuator/prometheus'
-        scrape_interval: 10s
-        scrape_timeout: 5s
-
       - job_name: 'rl-experience-collector'
         static_configs:
           - targets: ['rl-experience-collector.ai-loadbalancer.svc.cluster.local:8087']

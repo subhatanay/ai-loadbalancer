@@ -2,6 +2,7 @@ package com.bits.loadbalancer.metrics;
 
 import io.micrometer.core.instrument.*;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.Tags;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -46,9 +47,10 @@ public class LoadBalancerMetrics {
         this.meterRegistry = meterRegistry;
         
         // Initialize Load Balancer Request Processing Metrics
-        this.proxyRequestTimer = Timer.builder("lb_proxy_request_duration")
+        this.proxyRequestTimer = Timer.builder("lb_proxy_request_duration_seconds")
                 .description("Time taken to process proxy requests")
                 .tag("component", "load-balancer")
+                .publishPercentileHistogram(true)
                 .register(meterRegistry);
         
         this.proxyRequestsCounter = Counter.builder("lb_proxy_requests_total")
@@ -67,9 +69,10 @@ public class LoadBalancerMetrics {
                 .register(meterRegistry);
         
         // Initialize RL Agent Interaction Metrics
-        this.rlDecisionTimer = Timer.builder("rl_decision_duration")
+        this.rlDecisionTimer = Timer.builder("rl_decision_duration_seconds")
                 .description("Time taken for RL agent decisions")
                 .tag("component", "rl-agent")
+                .publishPercentileHistogram(true)
                 .register(meterRegistry);
         
         this.rlDecisionsCounter = Counter.builder("rl_decisions_total")
@@ -98,9 +101,10 @@ public class LoadBalancerMetrics {
                 .tag("component", "load-balancer")
                 .register(meterRegistry);
         
-        this.podResponseTimer = Timer.builder("lb_pod_response_time")
+        this.podResponseTimer = Timer.builder("lb_pod_response_duration_seconds")
                 .description("Response time from specific pods")
                 .tag("component", "load-balancer")
+                .publishPercentileHistogram(true)
                 .register(meterRegistry);
         
         this.podErrorsCounter = Counter.builder("lb_pod_errors_total")
@@ -132,24 +136,23 @@ public class LoadBalancerMetrics {
     }
     
     public void recordProxyRequest(Timer.Sample sample, String serviceName, String status) {
-        sample.stop(Timer.builder("lb_proxy_request_duration")
+        sample.stop(Timer.builder("lb_proxy_request_duration_seconds")
                 .tag("service", serviceName)
                 .tag("status", status)
+                .publishPercentileHistogram(true)
                 .register(meterRegistry));
-        Counter.builder("lb_proxy_requests_total")
-                .tag("service", serviceName)
-                .tag("status", status)
-                .register(meterRegistry)
+        meterRegistry.counter("lb_proxy_requests_total", 
+                "service", serviceName, 
+                "status", status)
                 .increment();
         activeConnections.decrementAndGet();
     }
     
     public void recordProxyError(String serviceName, String errorType, String statusCode) {
-        Counter.builder("lb_proxy_errors_total")
-                .tag("service", serviceName)
-                .tag("error_type", errorType)
-                .tag("status", statusCode)
-                .register(meterRegistry)
+        meterRegistry.counter("lb_proxy_errors_total", 
+                "service", serviceName, 
+                "error_type", errorType, 
+                "status", statusCode)
                 .increment();
         activeConnections.decrementAndGet();
     }
@@ -160,23 +163,22 @@ public class LoadBalancerMetrics {
     }
     
     public void recordRLDecision(Timer.Sample sample, String serviceName, String decisionType, double confidence) {
-        sample.stop(Timer.builder("rl_decision_duration")
+        sample.stop(Timer.builder("rl_decision_duration_seconds")
                 .tag("service", serviceName)
                 .tag("decision_type", decisionType)
+                .publishPercentileHistogram(true)
                 .register(meterRegistry));
-        Counter.builder("rl_decisions_total")
-                .tag("service", serviceName)
-                .tag("decision_type", decisionType)
-                .register(meterRegistry)
+        meterRegistry.counter("rl_decisions_total", 
+                "service", serviceName, 
+                "decision_type", decisionType)
                 .increment();
         rlConfidenceScore.record(confidence);
     }
     
     public void recordRLFallback(String serviceName, String reason) {
-        Counter.builder("rl_fallback_total")
-                .tag("service", serviceName)
-                .tag("reason", reason)
-                .register(meterRegistry)
+        meterRegistry.counter("rl_fallback_total", 
+                "service", serviceName, 
+                "reason", reason)
                 .increment();
     }
     
@@ -186,10 +188,9 @@ public class LoadBalancerMetrics {
     
     // Service-to-Pod Routing Methods
     public void recordPodRequest(String serviceName, String podName) {
-        Counter.builder("lb_pod_requests_total")
-                .tag("service", serviceName)
-                .tag("pod_name", podName)
-                .register(meterRegistry)
+        meterRegistry.counter("lb_pod_requests_total", 
+                "service", serviceName, 
+                "pod_name", podName)
                 .increment();
         activePodRequests.computeIfAbsent(serviceName + ":" + podName, k -> {
             AtomicLong counter = new AtomicLong(0);
@@ -203,19 +204,19 @@ public class LoadBalancerMetrics {
     }
     
     public void recordPodResponse(String serviceName, String podName, long responseTimeMs, int statusCode) {
-        Timer.builder("lb_pod_response_duration")
+        Timer.builder("lb_pod_response_duration_seconds")
                 .tag("service", serviceName)
                 .tag("pod_name", podName)
                 .tag("status", String.valueOf(statusCode))
+                .publishPercentileHistogram(true)
                 .register(meterRegistry)
                 .record(responseTimeMs, java.util.concurrent.TimeUnit.MILLISECONDS);
         
         if (statusCode >= 400) {
-            Counter.builder("lb_pod_errors_total")
-                    .tag("service", serviceName)
-                    .tag("pod_name", podName)
-                    .tag("status", String.valueOf(statusCode))
-                    .register(meterRegistry)
+            meterRegistry.counter("lb_pod_errors_total", 
+                    "service", serviceName, 
+                    "pod_name", podName, 
+                    "status", String.valueOf(statusCode))
                     .increment();
         }
         
@@ -228,20 +229,18 @@ public class LoadBalancerMetrics {
     
     // RL Feedback Loop Methods
     public void recordFeedbackSent(String serviceName, String podName, double responseTimeMs) {
-        Counter.builder("rl_feedback_sent_total")
-                .tag("service", serviceName)
-                .tag("pod_name", podName)
-                .register(meterRegistry)
+        meterRegistry.counter("rl_feedback_sent_total", 
+                "service", serviceName, 
+                "pod_name", podName)
                 .increment();
         rlFeedbackResponseTime.record(responseTimeMs);
     }
     
     public void recordFeedbackFailed(String serviceName, String podName, String errorType) {
-        Counter.builder("rl_feedback_failed_total")
-                .tag("service", serviceName)
-                .tag("pod_name", podName)
-                .tag("error_type", errorType)
-                .register(meterRegistry)
+        meterRegistry.counter("rl_feedback_failed_total", 
+                "service", serviceName, 
+                "pod_name", podName, 
+                "error_type", errorType)
                 .increment();
     }
     
@@ -252,5 +251,26 @@ public class LoadBalancerMetrics {
     
     public boolean isRLAgentHealthy() {
         return rlAgentHealthStatus.get() == 1;
+    }
+    
+    /**
+     * Check RL agent health based on recent decision activity
+     * Updates health status automatically based on decision frequency
+     */
+    public void checkAndUpdateRLAgentHealth() {
+        try {
+            // Check if RL decisions have been made in the last 60 seconds
+            double recentDecisions = meterRegistry.get("rl_decisions_total").counter().count();
+            double recentFallbacks = meterRegistry.get("rl_fallback_total").counter().count();
+            
+            // Calculate health based on decision success rate
+            double totalDecisions = recentDecisions + recentFallbacks;
+            boolean isHealthy = totalDecisions > 0 && (recentDecisions / totalDecisions) > 0.5;
+            
+            updateRLAgentHealth(isHealthy);
+        } catch (Exception e) {
+            // If metrics are not available, assume unhealthy
+            updateRLAgentHealth(false);
+        }
     }
 }

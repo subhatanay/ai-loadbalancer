@@ -1,43 +1,35 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ai-loadbalancer
+  name: ai-loadbalancer-high-load
   namespace: ai-loadbalancer
   labels:
-    app: ai-loadbalancer
+    app: ai-loadbalancer-high-load
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
-      app: ai-loadbalancer
+      app: ai-loadbalancer-high-load
   template:
     metadata:
       labels:
-        app: ai-loadbalancer
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "8080"
-        prometheus.io/path: "/actuator/prometheus"
+        app: ai-loadbalancer-high-load
     spec:
       containers:
       - name: ai-loadbalancer
-        image: load-balancer:latest
+        image: subhajgh/ai-loadbalancer:latest
         imagePullPolicy: Never
         ports:
         - containerPort: 8080
         env:
-        - name: SPRING_PROFILES_ACTIVE
-          value: "docker"
-        - name: SERVICE_HOST
-          value: "ai-loadbalancer"
         - name: REDIS_HOST
           value: "redis.ai-loadbalancer.svc.cluster.local"
         - name: REDIS_PORT
           value: "6379"
-        - name: RL_COLLECTOR_URL
-          value: "http://rl-experience-collector.ai-loadbalancer.svc.cluster.local:8081"
-        - name: RL_API_URL
-          value: "http://localhost:8088"
+        - name: PROMETHEUS_HOST
+          value: "prometheus-service.ai-loadbalancer.svc.cluster.local"
+        - name: PROMETHEUS_PORT
+          value: "9090"
         - name: USER_SERVICE_URL
           value: "http://user-service.ai-loadbalancer.svc.cluster.local:8081"
         - name: CART_SERVICE_URL
@@ -51,9 +43,9 @@ spec:
         - name: NOTIFICATION_SERVICE_URL
           value: "http://notification-service.ai-loadbalancer.svc.cluster.local:8086"
         - name: RL_COLLECTOR_ENABLED
-          value: "false"
+          value: "true"
         - name: LOAD_BALANCER_ROUTING_STRATEGY
-          value: "rl-based"
+          value: "round-robin"
         - name: SERVER_PORT
           value: "8080"
         - name: POD_NAME
@@ -82,11 +74,11 @@ spec:
           failureThreshold: 3
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
+            memory: "1Gi"
             cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
       - name: rl-agent
         image: subhajgh/ai-loadbalancer-rl-agent:latest
         imagePullPolicy: Never
@@ -121,19 +113,19 @@ spec:
           failureThreshold: 3
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "100m"
-          limits:
             memory: "512Mi"
             cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: ai-loadbalancer-service
+  name: ai-loadbalancer-high-load-service
   namespace: ai-loadbalancer
   labels:
-    app: ai-loadbalancer
+    app: ai-loadbalancer-high-load
 spec:
   type: ClusterIP
   ports:
@@ -146,4 +138,30 @@ spec:
     targetPort: 8088
     protocol: TCP
   selector:
-    app: ai-loadbalancer
+    app: ai-loadbalancer-high-load
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ai-loadbalancer-high-load-hpa
+  namespace: ai-loadbalancer
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-loadbalancer-high-load
+  minReplicas: 3
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

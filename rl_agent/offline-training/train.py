@@ -12,6 +12,6 @@ if not os.path.exists(data_file):
 
 print(f"🚀 Starting offline RL training with {data_file}")
 trainer = OfflineTrainer(data_file)
-result = trainer.train()
+result = trainer.train(save_checkpoints=False)
 print('✅ Training completed!')
 print('📊 Results:', result)

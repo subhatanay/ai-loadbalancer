@@ -1,0 +1,280 @@
+{
+  "rl_training_scenarios": {
+    "description": "Progressive Load Configuration - Gradual Load Increase Testing",
+    "version": "2.5",
+    "created_for": "Progressive Load Testing to Find System Limits",
+    
+    "base_config": {
+      "base_url": "http://localhost:8080/proxy",
+      "request_timeout": 12,
+      "retry_attempts": 2,
+      "retry_delay": 0.8,
+      "session_duration_minutes": 15,
+      "think_time_min": 0.3,
+      "think_time_max": 2.0,
+      "connection_pool_size": 150,
+      "max_retries_per_session": 3
+    },
+
+    "training_scenarios": {
+      "progressive_load_test": {
+        "description": "Progressive load increase - 2x baseline with gradual ramp",
+        "total_users": 400,
+        "test_duration_minutes": 100,
+        "max_concurrent_users": 240,
+        "ramp_up_time_seconds": 150,
+        
+        "traffic_patterns": [
+          {
+            "name": "warm_up_phase",
+            "start_minute": 0,
+            "duration_minutes": 15,
+            "intensity": "low",
+            "concurrent_users": 30,
+            "user_behavior_distribution": {
+              "quick_browsers": 0.5,
+              "careful_shoppers": 0.3,
+              "bulk_buyers": 0.1,
+              "impulse_buyers": 0.1
+            },
+            "scenario_weights": {
+              "browse_weight": 60,
+              "search_weight": 25,
+              "cart_weight": 10,
+              "order_weight": 4,
+              "profile_weight": 1
+            },
+            "service_load_characteristics": {
+              "user_service_load": "low",
+              "inventory_service_load": "low",
+              "cart_service_load": "very_low",
+              "order_service_load": "very_low",
+              "payment_service_load": "very_low"
+            }
+          },
+          {
+            "name": "moderate_load_phase",
+            "start_minute": 15,
+            "duration_minutes": 20,
+            "intensity": "medium",
+            "concurrent_users": 80,
+            "user_behavior_distribution": {
+              "quick_browsers": 0.4,
+              "careful_shoppers": 0.3,
+              "bulk_buyers": 0.15,
+              "impulse_buyers": 0.15
+            },
+            "scenario_weights": {
+              "browse_weight": 45,
+              "search_weight": 20,
+              "cart_weight": 20,
+              "order_weight": 12,
+              "profile_weight": 3
+            },
+            "service_load_characteristics": {
+              "user_service_load": "medium",
+              "inventory_service_load": "medium",
+              "cart_service_load": "low",
+              "order_service_load": "low",
+              "payment_service_load": "low"
+            }
+          },
+          {
+            "name": "high_load_phase",
+            "start_minute": 35,
+            "duration_minutes": 25,
+            "intensity": "high",
+            "concurrent_users": 160,
+            "user_behavior_distribution": {
+              "quick_browsers": 0.3,
+              "careful_shoppers": 0.25,
+              "bulk_buyers": 0.2,
+              "impulse_buyers": 0.25
+            },
+            "scenario_weights": {
+              "browse_weight": 35,
+              "search_weight": 15,
+              "cart_weight": 30,
+              "order_weight": 15,
+              "profile_weight": 5
+            },
+            "service_load_characteristics": {
+              "user_service_load": "high",
+              "inventory_service_load": "high",
+              "cart_service_load": "medium",
+              "order_service_load": "medium",
+              "payment_service_load": "medium"
+            }
+          },
+          {
+            "name": "peak_load_phase",
+            "start_minute": 60,
+            "duration_minutes": 20,
+            "intensity": "very_high",
+            "concurrent_users": 240,
+            "user_behavior_distribution": {
+              "quick_browsers": 0.2,
+              "careful_shoppers": 0.2,
+              "bulk_buyers": 0.3,
+              "impulse_buyers": 0.3
+            },
+            "scenario_weights": {
+              "browse_weight": 25,
+              "search_weight": 10,
+              "cart_weight": 40,
+              "order_weight": 20,
+              "profile_weight": 5
+            },
+            "service_load_characteristics": {
+              "user_service_load": "very_high",
+              "inventory_service_load": "very_high",
+              "cart_service_load": "high",
+              "order_service_load": "high",
+              "payment_service_load": "high"
+            }
+          },
+          {
+            "name": "cool_down_phase",
+            "start_minute": 80,
+            "duration_minutes": 20,
+            "intensity": "medium",
+            "concurrent_users": 60,
+            "user_behavior_distribution": {
+              "quick_browsers": 0.6,
+              "careful_shoppers": 0.3,
+              "bulk_buyers": 0.05,
+              "impulse_buyers": 0.05
+            },
+            "scenario_weights": {
+              "browse_weight": 70,
+              "search_weight": 20,
+              "cart_weight": 7,
+              "order_weight": 2,
+              "profile_weight": 1
+            },
+            "service_load_characteristics": {
+              "user_service_load": "medium",
+              "inventory_service_load": "high",
+              "cart_service_load": "low",
+              "order_service_load": "very_low",
+              "payment_service_load": "very_low"
+            }
+          }
+        ]
+      }
+    },
+
+    "user_behavior_profiles": {
+      "quick_browsers": {
+        "description": "Fast browsing users with quick decisions",
+        "session_duration_range": [2, 5],
+        "think_time_range": [0.3, 1.0],
+        "action_probabilities": {
+          "browse": 0.6,
+          "search": 0.2,
+          "cart": 0.15,
+          "order": 0.05
+        },
+        "conversion_rate": 0.15,
+        "pages_per_session": [3, 8],
+        "cart_abandonment_rate": 0.7
+      },
+      "careful_shoppers": {
+        "description": "Thoughtful users who research before buying",
+        "session_duration_range": [8, 15],
+        "think_time_range": [1.0, 3.0],
+        "action_probabilities": {
+          "browse": 0.4,
+          "search": 0.3,
+          "cart": 0.2,
+          "order": 0.1
+        },
+        "conversion_rate": 0.35,
+        "pages_per_session": [8, 20],
+        "cart_abandonment_rate": 0.4
+      },
+      "bulk_buyers": {
+        "description": "Users making large purchases",
+        "session_duration_range": [10, 25],
+        "think_time_range": [0.5, 2.0],
+        "action_probabilities": {
+          "browse": 0.2,
+          "search": 0.15,
+          "cart": 0.45,
+          "order": 0.2
+        },
+        "conversion_rate": 0.6,
+        "pages_per_session": [5, 15],
+        "cart_abandonment_rate": 0.25
+      },
+      "impulse_buyers": {
+        "description": "Quick decision makers with high conversion",
+        "session_duration_range": [3, 8],
+        "think_time_range": [0.2, 1.0],
+        "action_probabilities": {
+          "browse": 0.3,
+          "search": 0.1,
+          "cart": 0.35,
+          "order": 0.25
+        },
+        "conversion_rate": 0.5,
+        "pages_per_session": [2, 8],
+        "cart_abandonment_rate": 0.3
+      }
+    },
+
+    "enhanced_test_products": [
+      {
+        "sku": "LAPTOP-001",
+        "name": "Dell XPS 13 Laptop",
+        "category": "Electronics",
+        "price": 1299.99,
+        "image": "https://example.com/laptop.jpg",
+        "popularity_score": 0.9
+      },
+      {
+        "sku": "PHONE-001",
+        "name": "iPhone 15 Pro",
+        "category": "Electronics",
+        "price": 999.99,
+        "image": "https://example.com/phone.jpg",
+        "popularity_score": 0.95
+      },
+      {
+        "sku": "TABLET-001",
+        "name": "iPad Air 5th Gen",
+        "category": "Electronics",
+        "price": 599.99,
+        "image": "https://example.com/tablet.jpg",
+        "popularity_score": 0.8
+      },
+      {
+        "sku": "WATCH-001",
+        "name": "Apple Watch Series 9",
+        "category": "Electronics",
+        "price": 399.99,
+        "image": "https://example.com/watch.jpg",
+        "popularity_score": 0.85
+      }
+    ],
+
+    "realistic_shipping_addresses": [
+      {
+        "street": "123 Main St",
+        "city": "New York",
+        "state": "NY",
+        "zipCode": "10001",
+        "country": "US",
+        "phone": "+15551234567"
+      },
+      {
+        "street": "456 Oak Ave",
+        "city": "Los Angeles",
+        "state": "CA",
+        "zipCode": "90210",
+        "country": "US",
+        "phone": "+15559876543"
+      }
+    ]
+  }
+}

@@ -10,8 +10,8 @@
       "retry_attempts": 2,
       "retry_delay": 0.8,
       "session_duration_minutes": 15,
-      "think_time_min": 0.3,
-      "think_time_max": 2.5,
+      "think_time_min": 0.1,
+      "think_time_max": 1.0,
       "connection_pool_size": 100,
       "max_retries_per_session": 3
     },
@@ -19,9 +19,9 @@
     "training_scenarios": {
       "comprehensive_rl_training": {
         "description": "Comprehensive scenario covering all realistic e-commerce patterns for RL training",
-        "total_users": 500,
-        "test_duration_minutes": 150,
-        "max_concurrent_users": 120,
+        "total_users": 600,
+        "test_duration_minutes": 180,
+        "max_concurrent_users": 140,
         "ramp_up_time_seconds": 300,
         "data_collection_interval_seconds": 5,
         
@@ -31,7 +31,7 @@
             "start_minute": 0,
             "duration_minutes": 25,
             "intensity": "very_high",
-            "concurrent_users": 80,
+            "concurrent_users": 95,
             "user_behavior_distribution": {
               "quick_browsers": 0.4,
               "careful_shoppers": 0.25,
@@ -58,7 +58,7 @@
             "start_minute": 25,
             "duration_minutes": 35,
             "intensity": "medium",
-            "concurrent_users": 45,
+            "concurrent_users": 52,
             "user_behavior_distribution": {
               "quick_browsers": 0.6,
               "careful_shoppers": 0.3,
@@ -85,7 +85,7 @@
             "start_minute": 30,
             "duration_minutes": 20,
             "intensity": "high",
-            "concurrent_users": 70,
+            "concurrent_users": 84,
             "user_behavior_distribution": {
               "quick_browsers": 0.2,
               "careful_shoppers": 0.15,
@@ -114,7 +114,7 @@
             "start_minute": 50,
             "duration_minutes": 40,
             "intensity": "medium_low",
-            "concurrent_users": 35,
+            "concurrent_users": 42,
             "user_behavior_distribution": {
               "quick_browsers": 0.45,
               "careful_shoppers": 0.4,
@@ -141,7 +141,7 @@
             "start_minute": 90,
             "duration_minutes": 30,
             "intensity": "very_high",
-            "concurrent_users": 100,
+            "concurrent_users": 120,
             "user_behavior_distribution": {
               "quick_browsers": 0.2,
               "careful_shoppers": 0.3,
@@ -168,7 +168,7 @@
             "start_minute": 120,
             "duration_minutes": 30,
             "intensity": "low",
-            "concurrent_users": 20,
+            "concurrent_users": 24,
             "user_behavior_distribution": {
               "quick_browsers": 0.5,
               "careful_shoppers": 0.3,
@@ -195,9 +195,9 @@
 
       "stress_test_scenarios": {
         "description": "High-stress scenarios to test load balancer under extreme conditions",
-        "total_users": 200,
-        "test_duration_minutes": 60,
-        "max_concurrent_users": 150,
+        "total_users": 312,
+        "test_duration_minutes": 94,
+        "max_concurrent_users": 234,
         "ramp_up_time_seconds": 120,
         
         "traffic_patterns": [
@@ -206,7 +206,7 @@
             "start_minute": 0,
             "duration_minutes": 15,
             "intensity": "extreme",
-            "concurrent_users": 150,
+            "concurrent_users": 234,
             "user_behavior_distribution": {
               "quick_browsers": 0.1,
               "careful_shoppers": 0.1,
@@ -231,9 +231,9 @@
           {
             "name": "post_flash_sale_recovery",
             "start_minute": 15,
-            "duration_minutes": 45,
+            "duration_minutes": 58,
             "intensity": "medium",
-            "concurrent_users": 40,
+            "concurrent_users": 62,
             "user_behavior_distribution": {
               "quick_browsers": 0.6,
               "careful_shoppers": 0.3,
@@ -359,7 +359,7 @@
     "user_behavior_profiles": {
       "quick_browsers": {
         "session_duration_minutes": [2, 8],
-        "pages_per_session": [3, 12],
+        "pages_per_session": [6, 20],
         "conversion_rate": 0.05,
         "cart_abandonment_rate": 0.85,
         "search_probability": 0.7,
@@ -373,7 +373,7 @@
       },
       "careful_shoppers": {
         "session_duration_minutes": [8, 25],
-        "pages_per_session": [10, 35],
+        "pages_per_session": [15, 50],
         "conversion_rate": 0.25,
         "cart_abandonment_rate": 0.45,
         "search_probability": 0.8,
@@ -389,7 +389,7 @@
       },
       "bulk_buyers": {
         "session_duration_minutes": [15, 45],
-        "pages_per_session": [20, 60],
+        "pages_per_session": [30, 80],
         "conversion_rate": 0.7,
         "cart_abandonment_rate": 0.15,
         "search_probability": 0.9,
@@ -404,7 +404,7 @@
       },
       "impulse_buyers": {
         "session_duration_minutes": [3, 15],
-        "pages_per_session": [5, 20],
+        "pages_per_session": [8, 30],
         "conversion_rate": 0.4,
         "cart_abandonment_rate": 0.3,
         "search_probability": 0.4,
@@ -419,7 +419,7 @@
       },
       "mobile_first_users": {
         "session_duration_minutes": [1, 6],
-        "pages_per_session": [2, 8],
+        "pages_per_session": [4, 12],
         "conversion_rate": 0.15,
         "cart_abandonment_rate": 0.7,
         "search_probability": 0.6,
@@ -433,7 +433,7 @@
       },
       "subscription_buyers": {
         "session_duration_minutes": [5, 12],
-        "pages_per_session": [4, 15],
+        "pages_per_session": [8, 25],
         "conversion_rate": 0.6,
         "cart_abandonment_rate": 0.2,
         "search_probability": 0.5,
@@ -544,6 +544,72 @@
         "inventory_complexity": "high"
       }
     ],
+
+    "error_simulation_config": {
+      "description": "Configuration for realistic error scenarios to test load balancer resilience",
+      "error_injection_probability": 0.15,
+      "error_scenarios": {
+        "authentication_errors": {
+          "invalid_token_rate": 0.05,
+          "expired_token_rate": 0.03,
+          "missing_token_rate": 0.02,
+          "malformed_credentials_rate": 0.02
+        },
+        "product_errors": {
+          "invalid_product_sku_rate": 0.08,
+          "out_of_stock_simulation_rate": 0.05,
+          "product_not_found_rate": 0.06,
+          "invalid_category_search_rate": 0.04
+        },
+        "cart_errors": {
+          "invalid_quantity_rate": 0.03,
+          "negative_quantity_rate": 0.02,
+          "invalid_product_id_rate": 0.04,
+          "cart_limit_exceeded_rate": 0.02
+        },
+        "order_errors": {
+          "invalid_shipping_address_rate": 0.03,
+          "empty_cart_order_rate": 0.02,
+          "payment_method_missing_rate": 0.03,
+          "order_total_mismatch_rate": 0.02
+        },
+        "network_errors": {
+          "timeout_simulation_rate": 0.04,
+          "connection_refused_rate": 0.02,
+          "malformed_request_rate": 0.03
+        }
+      },
+      "invalid_product_skus": [
+        "INVALID-001", "NONEXISTENT-999", "DELETED-123", "EXPIRED-456", 
+        "MALFORMED@SKU", "NULL-PRODUCT", "EMPTY-", "SPECIAL#CHARS", 
+        "TOOLONG-PRODUCT-SKU-THAT-EXCEEDS-LIMITS-001"
+      ],
+      "invalid_categories": [
+        "NonExistentCategory", "InvalidCategory123", "NULL", "", 
+        "SpecialChars@#$", "TooLongCategoryNameThatExceedsLimits"
+      ],
+      "malformed_payloads": {
+        "user_registration": [
+          {"email": "invalid-email", "password": "123"},
+          {"firstName": "", "lastName": "", "email": "test@test.com"},
+          {"email": "test@test.com", "password": ""},
+          {"phoneNumber": "invalid-phone", "email": "test@test.com"}
+        ],
+        "cart_items": [
+          {"productId": "", "quantity": 1},
+          {"productId": "LAPTOP-001", "quantity": -5},
+          {"productId": "LAPTOP-001", "quantity": 999999},
+          {"productId": null, "quantity": 1},
+          {"price": -100, "quantity": 1}
+        ],
+        "orders": [
+          {"items": [], "shippingAddress": {}},
+          {"items": [{"productId": "LAPTOP-001"}], "shippingAddress": {"street": ""}},
+          {"shippingAddress": {"zipCode": "INVALID"}},
+          {"items": [{"quantity": 0, "unitPrice": -50}]}
+        ]
+      }
+    },
 
     "realistic_shipping_addresses": [
       {"street": "123 Main St", "city": "New York", "state": "NY", "zipCode": "10001", "country": "US", "phone": "+15551234567"},

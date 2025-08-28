@@ -27,24 +27,40 @@ class ExperienceLoader:
         self.log_file_path = Path(log_file_path)
         self.total_experiences = 0
 
-    def load_experiences(self, max_experiences: int = None) -> Generator[Experience, None, None]:
+    def load_experiences(self, max_experiences: int = None, offset: int = 0, limit: int = -1) -> Generator[Experience, None, None]:
         """
         Generator that yields Experience objects from the collector log file
 
         Args:
             max_experiences: Maximum number of experiences to load (None for all)
+            offset: Number of experiences to skip from the beginning
+            limit: Maximum number of experiences to yield (-1 for no limit)
         """
         if not self.log_file_path.exists():
             rl_logger.logger.error(f"Experience log file not found: {self.log_file_path}")
             return
 
-        rl_logger.logger.info(f"Loading experiences from {self.log_file_path}")
+        # Only log on first load to avoid spam
+        if offset == 0 and limit == -1:
+            rl_logger.logger.info(f"Loading experiences from {self.log_file_path}")
 
         count = 0
+        yielded_count = 0
+        processed_count = 0
+        
         with open(self.log_file_path, 'r') as f:
             for line_num, line in enumerate(f, 1):
                 try:
-                    if max_experiences and count >= max_experiences:
+                    if max_experiences and processed_count >= max_experiences:
+                        break
+                    
+                    # Skip lines until we reach the offset
+                    if processed_count < offset:
+                        processed_count += 1
+                        continue
+                    
+                    # Stop if we've reached the limit
+                    if limit != -1 and yielded_count >= limit:
                         break
 
                     data = json.loads(line.strip())
@@ -60,14 +76,18 @@ class ExperienceLoader:
                     )
 
                     yield experience
-                    count += 1
+                    yielded_count += 1
+                    processed_count += 1
 
                 except (json.JSONDecodeError, KeyError, ValueError) as e:
                     rl_logger.logger.warning(f"Skipping invalid experience at line {line_num}: {e}")
+                    processed_count += 1
                     continue
 
-        self.total_experiences = count
-        rl_logger.logger.info(f"Loaded {count} valid experiences")
+        self.total_experiences = yielded_count
+        # Only log completion for significant loads to reduce spam
+        if yielded_count > 1000:
+            rl_logger.logger.info(f"Loaded {yielded_count} valid experiences from {self.log_file_path}")
 
     def _parse_timestamp(self, timestamp_str):
         """Parse timestamp string handling various formats including Z suffix"""

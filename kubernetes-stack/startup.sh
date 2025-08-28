@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration toggles
-ENABLE_RL_COLLECTOR=false  # Set to true to enable RL-collector deployment
+ENABLE_RL_COLLECTOR=true  # Set to true to enable RL-collector deployment
 
 # Create Kind cluster
 echo "Creating Kind cluster..."
@@ -41,7 +41,7 @@ kubectl apply -f config-yaml/notification-service.yaml
 kubectl apply -f config-yaml/cluster-role.yaml
 kubectl apply -f config-yaml/prometheus-rbac.yaml
 kubectl apply -f config-yaml/prometheus.yaml
-kubectl apply -f config-yaml/grafana.yaml
+kubectl apply -f config-yaml/grafana-dashboard-provisioning.yaml
 # Conditionally apply RL-collector deployment
 if [ "$ENABLE_RL_COLLECTOR" = true ]; then
   echo "Deploying RL-collector..."
@@ -76,6 +76,33 @@ kubectl wait --for=condition=available --timeout=300s deployment/ai-loadbalancer
 echo "Deployment complete!"
 
 echo "Deployment complete!"
+
+# Auto-provision Grafana dashboards
+echo "🚀 Auto-provisioning Grafana dashboards..."
+sleep 10  # Wait for Grafana to be fully ready
+
+# Port-forward Grafana temporarily for dashboard import
+kubectl port-forward -n ai-loadbalancer service/grafana-service 3000:3000 &
+GRAFANA_PF_PID=$!
+sleep 5
+
+# Run dashboard provisioning script
+cd ../scripts
+python3 update-grafana-dashboards.py
+DASHBOARD_STATUS=$?
+
+# Stop port-forward
+kill $GRAFANA_PF_PID 2>/dev/null || true
+cd ../kubernetes-stack
+
+if [ $DASHBOARD_STATUS -eq 0 ]; then
+    echo "✅ Grafana dashboards provisioned successfully!"
+else
+    echo "⚠️  Dashboard provisioning had some issues. You can run the script manually:"
+    echo "     cd scripts && python3 update-grafana-dashboards.py"
+fi
+
+echo ""
 echo "Services are now running in the ai-loadbalancer namespace."
 echo ""
 echo "To access services, use port-forwarding:"
@@ -89,4 +116,4 @@ echo "Check pod status with: kubectl get pods -n ai-loadbalancer"
 echo "Access URLs:"
 echo "Load Balancer: http://localhost:8080"
 echo "Prometheus: http://localhost:9090"
-echo "Grafana: http://localhost:3000 (admin/admin)"
+echo "Grafana: http://localhost:3000 (admin/admin) - Dashboards auto-imported!"

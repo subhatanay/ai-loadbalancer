@@ -22,13 +22,20 @@ public class RLCollectorClient {
     }
 
     public void sendExperience(RLExperience exp) {
+        if (!props.isEnabled()) {
+            log.debug("RL collector disabled, skipping experience send");
+            return;
+        }
+        
         webClient.post()
-                .uri(props.getEndpointUrl() + "/experience")
+                .uri("/experience")  // Fixed: Don't double-append base URL
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(exp)
                 .retrieve()
                 .toBodilessEntity()
-                .doOnError(e -> log.error("Failed to send RL experience", e))
+                .doOnSuccess(result -> log.debug("Successfully sent RL experience to collector"))
+                .doOnError(e -> log.error("Failed to send RL experience to {}: {}", 
+                    props.getEndpointUrl(), e.getMessage(), e))
                 .subscribe();
     }
 }

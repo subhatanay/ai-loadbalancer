@@ -2,6 +2,7 @@ package com.bits.loadbalancer.controllers;
 
 import com.bits.commomutil.models.ServiceInfo;
 import com.bits.loadbalancer.metrics.LoadBalancerMetrics;
+import com.bits.loadbalancer.services.BenchmarkController;
 import com.bits.loadbalancer.services.RoutingStrategyAlgorithm;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
@@ -37,6 +38,9 @@ public class LoadBalancerController {
     
     @Autowired
     private LoadBalancerMetrics loadBalancerMetrics;
+    
+    @Autowired(required = false)
+    private BenchmarkController benchmarkController;
 
     @RequestMapping(value = "/{serviceName}/**", method = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE})
     public ResponseEntity<?> proxyRequest(
@@ -100,8 +104,14 @@ public class LoadBalancerController {
             provideFeedbackToRLAgent(serviceName, targetInstance.getInstanceName(), 
                                    responseTime, response.getStatusCode().value());
 
-            // Record successful proxy request metrics
-            loadBalancerMetrics.recordProxyRequest(proxyRequestSample, serviceName, "success");
+            // Stop metrics collection
+            loadBalancerMetrics.recordProxyRequest(proxyRequestSample, serviceName, 
+                    String.valueOf(response.getStatusCode().value()));
+
+            // Record benchmark metrics if in benchmark mode
+            if (benchmarkController != null) {
+                benchmarkController.recordRequest(responseTime, !response.getStatusCode().is2xxSuccessful());
+            }
 
             // Parse response body as JSON if possible, otherwise return as string
             Object responseBody = parseResponseBody(response.getBody());

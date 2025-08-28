@@ -46,7 +46,7 @@ logging:
     org.springframework.web: INFO
 
 loadbalancer:
-  routing-strategy: rl-based
+  routing-strategy: ${LOAD_BALANCER_ROUTING_STRATEGY:round-robin}
 
 rl:
   models:
@@ -60,7 +60,7 @@ rl:
     enabled: true
 
 collector:
-  enabled: ${RL_COLLECTOR_ENABLED:false}  # Toggle to enable/disable RL-collector integration
+  enabled: ${RL_COLLECTOR_ENABLED:true}  # Toggle to enable/disable RL-collector integration
   endpoint-url: ${RL_COLLECTOR_URL:http://rl-experience-collector.ai-loadbalancer.svc.cluster.local:8081}
   reward-scale: 1.0
 

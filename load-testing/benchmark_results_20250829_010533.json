@@ -1,0 +1,60 @@
+{
+  "config": {
+    "load_balancer_url": "http://localhost:8080",
+    "test_duration_minutes": 30,
+    "concurrent_users": 10,
+    "ramp_up_seconds": 5,
+    "test_scenarios": [
+      "user_browsing",
+      "cart_operations",
+      "order_processing"
+    ],
+    "metrics_collection_interval": 30
+  },
+  "results": {
+    "benchmarkActive": true,
+    "results": {
+      "testConfiguration": {
+        "startTime": "2025-08-28T19:02:18.275+00:00",
+        "algorithms": [
+          "rl-agent",
+          "round-robin"
+        ],
+        "durationMinutes": 60
+      },
+      "algorithmResults": {
+        "round-robin": {
+          "averageResponseTime": 711.6047345767576,
+          "requestCount": 2788,
+          "minResponseTime": 3,
+          "maxResponseTime": 5338,
+          "p50ResponseTime": 468,
+          "errorRate": 0.0,
+          "durationMs": 903199,
+          "errorCount": 0,
+          "p95ResponseTime": 2220,
+          "p99ResponseTime": 3931
+        },
+        "rl-agent": {
+          "averageResponseTime": 416.38539482879105,
+          "requestCount": 2862,
+          "minResponseTime": 2,
+          "maxResponseTime": 6306,
+          "p50ResponseTime": 173,
+          "errorRate": 0.0,
+          "durationMs": 1995108,
+          "errorCount": 0,
+          "p95ResponseTime": 2006,
+          "p99ResponseTime": 3292
+        }
+      },
+      "performanceComparison": {
+        "bestThroughput": "rl-agent",
+        "lowestErrorRate": "round-robin",
+        "rlVsRoundRobinImprovement": "41.5%",
+        "bestResponseTime": "rl-agent"
+      }
+    }
+  },
+  "metrics_history": []
+}

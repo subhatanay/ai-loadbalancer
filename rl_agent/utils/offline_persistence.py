@@ -39,22 +39,36 @@ class OfflineModelPersistence:
         return str(checkpoint_dir)
 
     def save_final_model(self, agent, state_encoder, training_results: Dict[str, Any]):
-        """Save final trained model"""
+        """Save final trained model without training history to reduce size"""
         final_dir = self.base_path / "final_model"
         final_dir.mkdir(exist_ok=True)
 
-        # Save components
+        # Save only essential agent components (no training history)
+        agent_essentials = {
+            'q_table': dict(agent.q_table),
+            'episode_count': agent.episode_count,
+            'current_epsilon': agent.current_epsilon
+        }
+        
         with open(final_dir / "agent.pkl", 'wb') as f:
-            pickle.dump(agent, f)
+            pickle.dump(agent_essentials, f)
 
         with open(final_dir / "state_encoder.pkl", 'wb') as f:
             pickle.dump(state_encoder, f)
 
-        # Save training results
+        # Save only essential training results (no full history)
+        essential_results = {
+            'status': training_results.get('status'),
+            'training_time_seconds': training_results.get('training_time_seconds'),
+            'data_stats': training_results.get('data_stats'),
+            'final_performance': training_results.get('final_performance'),
+            'action_mappings': training_results.get('action_mappings')
+        }
+        
         with open(final_dir / "training_results.json", 'w') as f:
-            json.dump(training_results, f, indent=2)
+            json.dump(essential_results, f, indent=2)
 
-        rl_logger.logger.info(f"Saved final model to {final_dir}")
+        rl_logger.logger.info(f"Saved lean final model to {final_dir}")
 
     def load_model(self, model_path: str = None):
         """Load trained model"""

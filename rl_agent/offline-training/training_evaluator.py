@@ -10,13 +10,16 @@ from utils.rl_logger import rl_logger
 class TrainingEvaluator:
     """Evaluates offline training progress and performance"""
 
-    def __init__(self):
+    def __init__(self, max_history_size: int = 100):
+        # Use limited-size histories to prevent memory bloat
+        self.max_history_size = max_history_size
         self.training_history = {
             'episodes': [],
             'total_rewards': [],
             'q_value_stats': [],
             'action_distributions': [],
-            'loss_history': []
+            'loss_history': [],
+            'validation_performance': []
         }
 
     def evaluate_episode(self, episode: int, experiences: List, agent, state_encoder):
@@ -38,19 +41,20 @@ class TrainingEvaluator:
 
             action_counts[action_idx] += 1
 
-        # Store statistics
-        self.training_history['episodes'].append(episode)
-        self.training_history['total_rewards'].append(total_reward)
+        # Store statistics with size limit to prevent memory bloat
+        self._append_with_limit('episodes', episode)
+        self._append_with_limit('total_rewards', total_reward)
 
         if q_values:
-            self.training_history['q_value_stats'].append({
+            q_stats = {
                 'mean': np.mean(q_values),
                 'std': np.std(q_values),
                 'min': np.min(q_values),
                 'max': np.max(q_values)
-            })
+            }
+            self._append_with_limit('q_value_stats', q_stats)
 
-        self.training_history['action_distributions'].append(dict(action_counts))
+        self._append_with_limit('action_distributions', dict(action_counts))
 
         # Log progress
         if episode % 100 == 0:
@@ -107,3 +111,12 @@ class TrainingEvaluator:
                 return i
 
         return -1
+
+    def _append_with_limit(self, key: str, value):
+        """Append to history with size limit to prevent memory bloat"""
+        history_list = self.training_history[key]
+        history_list.append(value)
+        
+        # Keep only the most recent entries
+        if len(history_list) > self.max_history_size:
+            history_list.pop(0)  # Remove oldest entry

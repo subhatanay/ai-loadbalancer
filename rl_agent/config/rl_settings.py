@@ -15,11 +15,11 @@ class QLearningConfig:
 @dataclass
 class StateEncodingConfig:
     """State encoding and discretization configuration"""
-    cpu_bins: int = 4
-    memory_bins: int = 4
-    latency_bins: int = 5
-    error_rate_bins: int = 3
-    throughput_bins: int = 4
+    cpu_bins: int = 16
+    memory_bins: int = 16
+    latency_bins: int = 20
+    error_rate_bins: int = 12
+    throughput_bins: int = 16
     bin_strategy: str = "quantile"  # uniform, quantile, kmeans
 
 @dataclass
@@ -35,12 +35,12 @@ class RewardConfig:
 @dataclass
 class TrainingConfig:
     """Training loop configuration"""
-    max_episodes: int = 5000
+    max_episodes: int = 500
     episode_length: int = 100
-    batch_size: int = 32
+    batch_size: int = 64
     update_frequency: int = 10
-    save_frequency: int = 100
-    evaluation_frequency: int = 50
+    save_frequency: int = 50
+    evaluation_frequency: int = 25
 
 @dataclass
 class RLAgentSettings:

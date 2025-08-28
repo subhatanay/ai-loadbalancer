@@ -151,11 +151,16 @@ public class ExperienceLoggingInterceptor implements HandlerInterceptor {
             
             // Send to collector if enabled and available
             if (collectorProperties.isEnabled() && collectorClient != null) {
-                collectorClient.sendExperience(experience);
-                log.debug("RL experience sent to collector: {} -> {} (reward: {})", 
-                        requestPath, chosenInstance, reward);
-            } else if (!collectorProperties.isEnabled()) {
-                log.debug("RL collector disabled - experience not sent to collector");
+                try {
+                    collectorClient.sendExperience(experience);
+                    log.debug("RL experience sent to collector: {} -> {} (reward: {})", 
+                            requestPath, chosenInstance, reward);
+                } catch (Exception e) {
+                    log.warn("Failed to send RL experience to collector: {}", e.getMessage());
+                }
+            } else {
+                log.debug("RL collector disabled or unavailable - experience not sent (enabled: {}, client: {})", 
+                        collectorProperties.isEnabled(), collectorClient != null);
             }
             
         } catch (Exception e) {

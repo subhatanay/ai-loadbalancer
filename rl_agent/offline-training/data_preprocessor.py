@@ -94,3 +94,35 @@ class DataPreprocessor:
             service_metrics.append(service_metric)
 
         return service_metrics
+
+    def process_experiences_generator(self, experiences):
+        """
+        Process experiences from a generator one by one, yielding processed tuples
+        
+        Args:
+            experiences: Generator yielding Experience objects
+            
+        Yields:
+            Tuples of (state_metrics, action_idx, reward, next_state_metrics)
+        """
+        for exp in experiences:
+            try:
+                # Convert metrics dict to ServiceMetrics objects
+                state_metrics = self._convert_to_service_metrics(exp.state, exp.timestamp)
+                next_state_metrics = self._convert_to_service_metrics(exp.next_state, exp.timestamp)
+
+                # Get action index
+                action_idx = self.action_to_idx.get(exp.action)
+                if action_idx is None:
+                    continue
+
+                yield (
+                    state_metrics,
+                    action_idx,
+                    exp.reward,
+                    next_state_metrics
+                )
+
+            except Exception as e:
+                rl_logger.logger.warning(f"Skipping experience due to processing error: {e}")
+                continue

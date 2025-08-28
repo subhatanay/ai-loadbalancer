@@ -62,11 +62,9 @@ class RLTrainingLoadTester:
         self.active_sessions = {}
         self.test_start_time = None
         
-    def get_session(self) -> requests.Session:
-        """Get thread-local session to avoid concurrency issues"""
-        if not hasattr(self.thread_local, 'session'):
-            self.thread_local.session = requests.Session()
-        return self.thread_local.session
+        # Error simulation configuration
+        self.error_config = self.config.get('error_simulation_config', {})
+        self.error_injection_rate = self.error_config.get('error_injection_probability', 0.15)
         
         # User behavior profiles for diverse training data
         self.user_profiles = {
@@ -88,6 +86,12 @@ class RLTrainingLoadTester:
             )
         }
         
+    def get_session(self) -> requests.Session:
+        """Get thread-local session to avoid concurrency issues"""
+        if not hasattr(self.thread_local, 'session'):
+            self.thread_local.session = requests.Session()
+        return self.thread_local.session
+        
     def load_config(self, config_file: str) -> Dict[str, Any]:
         """Load RL training configuration"""
         try:
@@ -103,7 +107,7 @@ class RLTrainingLoadTester:
         return random.choice(list(self.user_profiles.values()))
     
     def register_user(self) -> Optional[str]:
-        """Register a new user and return JWT token with retry logic"""
+        """Register a new user and return JWT token with retry logic and error simulation"""
         max_retries = 3
         
         for attempt in range(max_retries):
@@ -112,13 +116,17 @@ class RLTrainingLoadTester:
                 timestamp = int(time.time() * 1000)
                 user_email = f"rltest_{uuid.uuid4().hex[:8]}_{timestamp}_{attempt}@example.com"
                 
-                user_data = {
-                    "firstName": random.choice(['John', 'Jane', 'Mike', 'Sarah', 'David', 'Lisa']),
-                    "lastName": random.choice(['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia']),
-                    "email": user_email,
-                    "password": "LoadTest123!",
-                    "phoneNumber": f"+1{random.randint(2000000000, 9999999999)}"
-                }
+                # Simulate authentication errors
+                if self.should_inject_error('authentication_errors'):
+                    user_data = self.generate_malformed_user_data(user_email)
+                else:
+                    user_data = {
+                        "firstName": random.choice(['John', 'Jane', 'Mike', 'Sarah', 'David', 'Lisa']),
+                        "lastName": random.choice(['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia']),
+                        "email": user_email,
+                        "password": "LoadTest123!",
+                        "phoneNumber": f"+1{random.randint(2000000000, 9999999999)}"
+                    }
                 
                 # Try registration (may fail if user exists, that's OK)
                 try:
@@ -131,10 +139,14 @@ class RLTrainingLoadTester:
                     pass  # Registration failure is OK, we'll try login
                 
                 # Always try login regardless of registration result
-                login_data = {
-                    "email": user_email,
-                    "password": "LoadTest123!"
-                }
+                # Simulate login errors
+                if self.should_inject_error('authentication_errors'):
+                    login_data = self.generate_malformed_login_data(user_email)
+                else:
+                    login_data = {
+                        "email": user_email,
+                        "password": "LoadTest123!"
+                    }
                 
                 login_response = self.get_session().post(
                     f"{self.base_url}/user-service/api/users/login",
@@ -145,6 +157,11 @@ class RLTrainingLoadTester:
                 if login_response.status_code == 200:
                     token = login_response.json().get('token')
                     if token:
+                        # Simulate expired/invalid token scenarios
+                        if self.should_inject_error('authentication_errors', 'expired_token_rate'):
+                            return "EXPIRED_TOKEN_SIMULATION"
+                        elif self.should_inject_error('authentication_errors', 'invalid_token_rate'):
+                            return "INVALID_TOKEN_SIMULATION"
                         return token
                 
                 # If login failed, wait and retry
@@ -242,6 +259,108 @@ class RLTrainingLoadTester:
         
         return session_metrics
     
+    def should_inject_error(self, error_category: str, specific_error: str = None) -> bool:
+        """Determine if an error should be injected based on configuration"""
+        if not self.error_config or random.random() > self.error_injection_rate:
+            return False
+        
+        error_scenarios = self.error_config.get('error_scenarios', {})
+        category_config = error_scenarios.get(error_category, {})
+        
+        if specific_error and specific_error in category_config:
+            return random.random() < category_config[specific_error]
+        
+        # General category error injection
+        return random.random() < 0.3  # 30% chance within error injection
+    
+    def get_error_headers(self, headers: Dict[str, str]) -> Dict[str, str]:
+        """Get headers with potential authentication errors"""
+        if self.should_inject_error('authentication_errors', 'missing_token_rate'):
+            return {}  # Missing authorization header
+        elif self.should_inject_error('authentication_errors', 'invalid_token_rate'):
+            return {'Authorization': 'Bearer INVALID_TOKEN_SIMULATION'}
+        elif self.should_inject_error('authentication_errors', 'malformed_credentials_rate'):
+            return {'Authorization': 'InvalidFormat'}
+        return headers
+    
+    def generate_malformed_user_data(self, email: str) -> Dict[str, Any]:
+        """Generate malformed user registration data"""
+        malformed_payloads = self.error_config.get('malformed_payloads', {}).get('user_registration', [])
+        if malformed_payloads:
+            base_payload = random.choice(malformed_payloads).copy()
+            if 'email' not in base_payload or not base_payload['email']:
+                base_payload['email'] = email
+            return base_payload
+        
+        # Fallback malformed data
+        return {
+            "email": "invalid-email-format",
+            "password": "",
+            "firstName": "",
+            "lastName": ""
+        }
+    
+    def generate_malformed_login_data(self, email: str) -> Dict[str, Any]:
+        """Generate malformed login data"""
+        error_type = random.choice(['invalid_email', 'empty_password', 'wrong_credentials'])
+        
+        if error_type == 'invalid_email':
+            return {"email": "not-an-email", "password": "LoadTest123!"}
+        elif error_type == 'empty_password':
+            return {"email": email, "password": ""}
+        else:
+            return {"email": email, "password": "WrongPassword123!"}
+    
+    def generate_malformed_cart_data(self, product_sku: str, product_name: str, 
+                                   quantity: int, unit_price: float) -> Dict[str, Any]:
+        """Generate malformed cart data"""
+        malformed_payloads = self.error_config.get('malformed_payloads', {}).get('cart_items', [])
+        if malformed_payloads:
+            base_payload = random.choice(malformed_payloads).copy()
+            # Ensure we have some valid data
+            if not base_payload.get('productId'):
+                base_payload['productId'] = product_sku
+            return base_payload
+        
+        # Fallback malformed data
+        return {
+            "productId": "",
+            "quantity": -1,
+            "price": -100,
+            "unitPrice": "invalid_price"
+        }
+    
+    def generate_malformed_order_data(self, order_items: List[Dict], addresses: List[Dict]) -> Dict[str, Any]:
+        """Generate malformed order data"""
+        malformed_payloads = self.error_config.get('malformed_payloads', {}).get('orders', [])
+        if malformed_payloads:
+            base_payload = random.choice(malformed_payloads).copy()
+            # Ensure we have some items if payload is completely empty
+            if not base_payload.get('items') and order_items:
+                base_payload['items'] = order_items[:1]  # At least one item
+            return base_payload
+        
+        # Fallback malformed data
+        error_type = random.choice(['empty_items', 'invalid_address', 'missing_fields'])
+        
+        if error_type == 'empty_items':
+            return {
+                "items": [],
+                "shippingAddress": random.choice(addresses),
+                "notes": "Empty cart order"
+            }
+        elif error_type == 'invalid_address':
+            return {
+                "items": order_items,
+                "shippingAddress": {"street": "", "zipCode": "INVALID"},
+                "notes": "Invalid address order"
+            }
+        else:
+            return {
+                "items": [{"productId": "INVALID"}],  # Missing required fields
+                "notes": "Missing fields order"
+            }
+    
     def select_action(self, probabilities: Dict[str, float]) -> str:
         """Select action based on probability distribution"""
         actions = list(probabilities.keys())
@@ -263,14 +382,28 @@ class RLTrainingLoadTester:
             return False, time.time() - start_time
     
     def search_products(self, headers: Dict[str, str], query: str) -> tuple:
-        """Search products endpoint"""
+        """Search products endpoint with error simulation"""
         start_time = time.time()
         try:
-            # Get specific product details
-            product_sku = query.replace(' ', '-').upper() + '-001'
+            # Simulate product search errors
+            if self.should_inject_error('product_errors', 'invalid_product_sku_rate'):
+                product_sku = random.choice(self.error_config.get('invalid_product_skus', ['INVALID-001']))
+            elif self.should_inject_error('product_errors', 'invalid_category_search_rate'):
+                # Search by invalid category
+                invalid_category = random.choice(self.error_config.get('invalid_categories', ['InvalidCategory']))
+                response = self.get_session().get(
+                    f"{self.base_url}/inventory-service/api/inventory/category/{invalid_category}",
+                    headers=self.get_error_headers(headers),
+                    timeout=self.config['base_config']['request_timeout']
+                )
+                latency = time.time() - start_time
+                return response.status_code == 200, latency
+            else:
+                product_sku = query.replace(' ', '-').upper() + '-001'
+            
             response = self.get_session().get(
                 f"{self.base_url}/inventory-service/api/inventory/products/{product_sku}",
-                headers=headers,
+                headers=self.get_error_headers(headers),
                 timeout=self.config['base_config']['request_timeout']
             )
             latency = time.time() - start_time
@@ -279,14 +412,19 @@ class RLTrainingLoadTester:
             return False, time.time() - start_time
     
     def add_to_cart(self, headers: Dict[str, str], product: Dict, cart_items: List) -> tuple:
-        """Add item to cart with correct endpoint and payload"""
+        """Add item to cart with error simulation"""
         start_time = time.time()
         try:
+            # Simulate cart errors
+            if self.should_inject_error('cart_errors', 'invalid_product_id_rate'):
+                product_sku = random.choice(self.error_config.get('invalid_product_skus', ['INVALID-001']))
+            else:
+                product_sku = product.get('sku', 'LAPTOP-001')
+            
             # First check if product exists in inventory
-            product_sku = product.get('sku', 'LAPTOP-001')
-            inventory_check = self.session.get(
+            inventory_check = self.get_session().get(
                 f"{self.base_url}/inventory-service/api/inventory/products/{product_sku}",
-                headers=headers,
+                headers=self.get_error_headers(headers),
                 timeout=self.config['base_config']['request_timeout']
             )
             
@@ -301,21 +439,32 @@ class RLTrainingLoadTester:
                 
                 product_name = product_names.get(product_sku, f"Product {product_sku}")
                 unit_price = random.uniform(99.99, 1999.99)
-                quantity = random.choices([1, 2, 3], [70, 25, 5])[0]
                 
-                cart_data = {
-                    "productId": product_sku,
-                    "productSku": product_sku,
-                    "productName": product_name,
-                    "quantity": quantity,
-                    "price": unit_price,
-                    "unitPrice": unit_price
-                }
+                # Simulate cart quantity errors
+                if self.should_inject_error('cart_errors', 'negative_quantity_rate'):
+                    quantity = random.randint(-10, -1)
+                elif self.should_inject_error('cart_errors', 'invalid_quantity_rate'):
+                    quantity = random.choice([0, 999999, -1])
+                else:
+                    quantity = random.choices([1, 2, 3], [70, 25, 5])[0]
+                
+                # Generate cart data with potential errors
+                if self.should_inject_error('cart_errors'):
+                    cart_data = self.generate_malformed_cart_data(product_sku, product_name, quantity, unit_price)
+                else:
+                    cart_data = {
+                        "productId": product_sku,
+                        "productSku": product_sku,
+                        "productName": product_name,
+                        "quantity": quantity,
+                        "price": unit_price,
+                        "unitPrice": unit_price
+                    }
                 
                 response = self.get_session().post(
                     f"{self.base_url}/cart-service/api/cart/items",
                     json=cart_data,
-                    headers=headers,
+                    headers=self.get_error_headers(headers),
                     timeout=self.config['base_config']['request_timeout']
                 )
                 
@@ -363,16 +512,20 @@ class RLTrainingLoadTester:
                     "totalPrice": unit_price * quantity
                 })
             
-            order_data = {
-                "items": order_items,
-                "shippingAddress": random.choice(addresses),
-                "notes": "RL Training Load Test Order"
-            }
+            # Simulate order errors
+            if self.should_inject_error('order_errors'):
+                order_data = self.generate_malformed_order_data(order_items, addresses)
+            else:
+                order_data = {
+                    "items": order_items,
+                    "shippingAddress": random.choice(addresses),
+                    "notes": "RL Training Load Test Order"
+                }
             
             response = self.get_session().post(
                 f"{self.base_url}/order-service/api/orders",
                 json=order_data,
-                headers=headers,
+                headers=self.get_error_headers(headers),
                 timeout=self.config['base_config']['request_timeout']
             )
             

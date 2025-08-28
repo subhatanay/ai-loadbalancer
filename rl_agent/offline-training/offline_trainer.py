@@ -22,7 +22,7 @@ class OfflineTrainer:
         self.experience_log_path = experience_log_path
         self.loader = ExperienceLoader(experience_log_path)
         self.preprocessor = DataPreprocessor()
-        self.evaluator = TrainingEvaluator()
+        self.evaluator = TrainingEvaluator(max_history_size=50)
 
         # Initialize RL components
         self.agent = QLearningAgent()
@@ -66,7 +66,7 @@ class OfflineTrainer:
 
         rl_logger.logger.info(f"Split data: {len(train_experiences)} training, {len(val_experiences)} validation")
 
-        # Step 3: Preprocess experiences
+        # Step 3: Preprocess experiences and fit encoders
         rl_logger.logger.info("Preprocessing experiences...")
         # Build action mappings on all experiences first
         all_experiences = train_experiences + val_experiences
@@ -75,20 +75,24 @@ class OfflineTrainer:
         processed_train, train_metadata = self.preprocessor.process_experiences(train_experiences)
         processed_val, val_metadata = self.preprocessor.process_experiences(val_experiences)
 
-        # Step 4: Fit state encoder on training data
+        # Step 4: Fit state encoder with all processed data
         rl_logger.logger.info("Fitting state encoder...")
-        all_states = []
-        for exp in processed_train:
-            all_states.extend(exp[0])  # state metrics (list of ServiceMetrics)
-            all_states.extend(exp[3])  # next_state metrics (list of ServiceMetrics)
-        self.state_encoder.fit(all_states)
+        all_states_for_fitting = []
+        for state_metrics, _, _, next_state_metrics in processed_train + processed_val:
+            all_states_for_fitting.extend(state_metrics)
+            all_states_for_fitting.extend(next_state_metrics)
+        
+        self.state_encoder.fit(all_states_for_fitting)
+        rl_logger.logger.info("State encoder fitting completed")
 
         # Step 5: Train agent
         rl_logger.logger.info("Training Q-learning agent...")
-        training_summary = self._train_agent(processed_train, processed_val, save_checkpoints)
+        training_summary = self._train_agent(len(train_experiences), len(val_experiences), save_checkpoints)
 
-        # Step 6: Final evaluation
-        final_performance = self._evaluate_final_performance(processed_val)
+        # Step 6: Final evaluation (requires a fresh generator)
+        val_experiences_gen = self.loader.load_experiences(offset=len(train_experiences), limit=len(val_experiences))
+        processed_val_data = self.preprocessor.process_experiences_generator(val_experiences_gen)
+        final_performance = self._evaluate_final_performance(processed_val_data)
 
         total_time = time.time() - start_time
 
@@ -120,47 +124,78 @@ class OfflineTrainer:
             'final_model_path': final_checkpoint_path
         }
 
-    def _train_agent(self, train_data, val_data, save_checkpoints: bool):
-        """Train the Q-learning agent on the processed data"""
+    def _train_agent(self, train_count, val_count, save_checkpoints):
+        """Train the Q-learning agent using pre-loaded data with shuffling to avoid repeated file reads."""
         batch_size = self.config.batch_size
+        rl_logger.logger.info(f"Training on {train_count} experiences with batch size {batch_size}")
+        
+        # Load training data once at the beginning
+        rl_logger.logger.info("Loading training data once for all epochs...")
+        train_experiences = list(self.loader.load_experiences(limit=train_count))
+        processed_train_data = list(self.preprocessor.process_experiences_generator(iter(train_experiences)))
+        rl_logger.logger.info(f"Loaded {len(processed_train_data)} processed training experiences")
 
-        rl_logger.logger.info(f"Training on {len(train_data)} experiences with batch size {batch_size}")
-
-        # Training loop
         for epoch in range(self.config.max_episodes):
-            epoch_loss = 0.0
-            batch_count = 0
+            # Shuffle data each epoch for better training
+            import random
+            random.shuffle(processed_train_data)
+            
+            total_loss = 0
+            num_batches = 0
 
-            # Process in batches
-            for i in range(0, len(train_data), batch_size):
-                batch = train_data[i:i + batch_size]
+            # Train in batches
+            batch = []
+            for experience in processed_train_data:
+                batch.append(experience)
+                if len(batch) == batch_size:
+                    for state_metrics, action_idx, reward, next_state_metrics in batch:
+                        state = self.state_encoder.encode_state(state_metrics)
+                        next_state = self.state_encoder.encode_state(next_state_metrics)
+                        action = self.preprocessor.idx_to_action[action_idx]
 
+                        old_q = self.agent.q_table.get((state, action), 0.0)
+                        self.agent._update_q_value(state, action, reward, next_state)
+                        new_q = self.agent.q_table.get((state, action), 0.0)
+
+                        td_error = abs(new_q - old_q)
+                        total_loss += td_error
+
+                    batch = []
+                    num_batches += 1
+
+            # Process remaining batch
+            if batch:
                 for state_metrics, action_idx, reward, next_state_metrics in batch:
-                    # Encode states
                     state = self.state_encoder.encode_state(state_metrics)
                     next_state = self.state_encoder.encode_state(next_state_metrics)
-
-                    # Convert action index back to action name for agent
                     action = self.preprocessor.idx_to_action[action_idx]
 
-                    # Update Q-table
-                    old_q = self.agent.q_table.get(state, {}).get(action, 0.0)
+                    old_q = self.agent.q_table.get((state, action), 0.0)
                     self.agent._update_q_value(state, action, reward, next_state)
-                    new_q = self.agent.q_table.get(state, {}).get(action, 0.0)
+                    new_q = self.agent.q_table.get((state, action), 0.0)
 
-                    # Track loss (TD error)
                     td_error = abs(new_q - old_q)
-                    epoch_loss += td_error
+                    total_loss += td_error
 
-                batch_count += 1
+                num_batches += 1
 
             # Evaluate epoch
-            avg_loss = epoch_loss / len(train_data)
-            self.evaluator.training_history['loss_history'].append(avg_loss)
+            avg_loss = total_loss / num_batches if num_batches > 0 else 0
+            # Only store loss history for recent epochs to save memory
+            if epoch % 10 == 0:  # Store every 10th epoch only
+                self.evaluator.training_history['loss_history'].append(avg_loss)
 
             # Validation evaluation
             if epoch % self.config.evaluation_frequency == 0:
-                val_performance = self._evaluate_on_validation(val_data)
+                # Load validation data once if not already loaded
+                if epoch == 0:
+                    rl_logger.logger.info("Loading validation data once...")
+                    val_experiences = list(self.loader.load_experiences(offset=train_count, limit=val_count))
+                    self.processed_val_data = list(self.preprocessor.process_experiences_generator(iter(val_experiences)))
+                    rl_logger.logger.info(f"Loaded {len(self.processed_val_data)} validation experiences")
+                
+                val_performance = self._evaluate_on_validation(iter(self.processed_val_data))
+                self.evaluator.training_history['validation_performance'].append(val_performance)
                 rl_logger.logger.info(f"Epoch {epoch}: Loss: {avg_loss:.4f}, Val Performance: {val_performance:.3f}")
 
             # Save checkpoint
@@ -178,7 +213,7 @@ class OfflineTrainer:
             state = self.state_encoder.encode_state(state_metrics)
             action = self.preprocessor.idx_to_action[action_idx]
 
-            q_value = self.agent.q_table.get(state, {}).get(action, 0.0)
+            q_value = self.agent.q_table.get((state, action), 0.0)
             total_q_value += q_value
             count += 1
 
