@@ -12,12 +12,17 @@ public class RoutingStrategyAlgorithm {
     @Getter
     @Value("${loadbalancer.routing-strategy:round-robin}")
     private String routingStrategy;
+    
+    public void setRoutingStrategy(String routingStrategy) {
+        this.routingStrategy = routingStrategy;
+    }
 
     @Autowired
     RoundRobinBasedLoadbalancer roundRobinLoadBalancer;
 
-//    @Autowired
-    ConnectionAwareLoadBalancer connectionAwareLoadBalancer;
+    @Autowired
+    LeastConnectionsLoadBalancer leastConnectionsLoadBalancer;
+
 
     @Autowired
     RLBasedLoadbalancer rlBasedLoadbalancer;
@@ -28,9 +33,10 @@ public class RoutingStrategyAlgorithm {
 
     public Loadbalancer getLoadbalancer() {
         return switch (routingStrategy) {
-            case "connection-aware" -> connectionAwareLoadBalancer;
+            case "least-connections" -> leastConnectionsLoadBalancer;
             case "rl-based" -> rlApiLoadBalancer;  // Use new RL API-based load balancer
             case "rl-static" -> rlBasedLoadbalancer;  // Keep old static Q-table for comparison
+            case "rl-agent" -> rlApiLoadBalancer;  // Alias for rl-based
             default -> roundRobinLoadBalancer;
         };
     }

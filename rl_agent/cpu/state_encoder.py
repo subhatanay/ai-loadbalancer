@@ -1,4 +1,5 @@
 import numpy as np
+import time
 from typing import Dict, List, Tuple, Any, Optional
 from sklearn.preprocessing import KBinsDiscretizer
 from sklearn.exceptions import NotFittedError
@@ -82,54 +83,141 @@ class StateEncoder:
         self.is_fitted = True
         rl_logger.logger.info("State encoder fitting completed")
 
-    def encode_state(self, service_metrics: List[ServiceMetrics]) -> Tuple[np.float64, ...]:
+    def encode_state(self, service_metrics: List[ServiceMetrics]) -> Tuple[int, ...]:
         """
         Encode current service metrics into discrete state representation.
-        Uses fallback middle bin if metric's discretizer is not fitted.
+        Uses aggressive caching and fast encoding for production performance.
         """
-        if not self.is_fitted:
-            rl_logger.logger.warning("State encoder not fitted. Using default binning.")
+        # Generate cache key for this set of metrics
+        cache_key = self._get_metrics_cache_key(service_metrics)
+        current_time = time.time()
+        
+        # Check cache first
+        if cache_key in self.state_cache:
+            cached_state, cache_time = self.state_cache[cache_key]
+            if current_time - cache_time < 5.0:  # 5 second cache for states
+                return cached_state
+        
+        try:
+            if not service_metrics:
+                fallback_state = (0, 0, 0, 0, 0)  # Default state
+                self.state_cache[cache_key] = (fallback_state, current_time)
+                return fallback_state
 
-        state_key = self._create_cache_key(service_metrics)
-        if state_key in self.state_cache:
-            return self.state_cache[state_key]
+            # Extract metrics for encoding - use first metric for speed
+            metrics_dict = self._extract_metrics_dict(service_metrics[0])
+            
+            # Fast encoding without discretizers if not fitted
+            if not self.is_fitted:
+                encoded_state = self._fast_encode_state(metrics_dict)
+            else:
+                encoded_state = self._discretize_metrics(metrics_dict)
+            
+            # Cache the result
+            self.state_cache[cache_key] = (encoded_state, current_time)
+            
+            # Clean cache periodically
+            if len(self.state_cache) > 200:
+                self._cleanup_state_cache(current_time)
+            
+            return encoded_state
 
-        aggregated_metrics = self._aggregate_service_metrics(service_metrics)
-        state_components = []
+        except Exception as e:
+            rl_logger.log_error("State encoding failed, using fallback", e)
+            fallback_state = (0, 0, 0, 0, 0)
+            self.state_cache[cache_key] = (fallback_state, current_time)
+            return fallback_state
 
+    def _get_metrics_cache_key(self, metrics: List[ServiceMetrics]) -> str:
+        """Generate cache key for metrics"""
+        try:
+            if not metrics:
+                return "empty"
+            
+            # Simple key based on rounded values for caching
+            m = metrics[0]
+            key_parts = []
+            if hasattr(m, 'cpu_usage_percent') and m.cpu_usage_percent is not None:
+                key_parts.append(f"cpu:{int(m.cpu_usage_percent/5)*5}")  # Round to 5%
+            if hasattr(m, 'avg_response_time_ms') and m.avg_response_time_ms is not None:
+                key_parts.append(f"rt:{int(m.avg_response_time_ms/50)*50}")  # Round to 50ms
+            if hasattr(m, 'request_rate_per_second') and m.request_rate_per_second is not None:
+                key_parts.append(f"rps:{int(m.request_rate_per_second/10)*10}")  # Round to 10 rps
+            
+            return "|".join(key_parts) if key_parts else "default"
+        except Exception:
+            return f"fallback:{int(time.time())}"
+    
+    def _fast_encode_state(self, metrics_dict: Dict[str, float]) -> Tuple[int, ...]:
+        """Fast state encoding without discretizers"""
+        encoded = []
+        
+        # CPU usage (0-4 bins)
+        cpu = metrics_dict.get('cpu_usage_percent', 0)
+        cpu_bin = min(4, int(cpu / 25)) if cpu is not None else 0
+        encoded.append(cpu_bin)
+        
+        # Memory usage (0-4 bins) 
+        memory = metrics_dict.get('jvm_memory_usage_percent', 0)
+        memory_bin = min(4, int(memory / 25)) if memory is not None else 0
+        encoded.append(memory_bin)
+        
+        # Response time (0-4 bins)
+        rt = metrics_dict.get('avg_response_time_ms', 0)
+        rt_bin = min(4, int(rt / 100)) if rt is not None else 0  # 100ms buckets
+        encoded.append(rt_bin)
+        
+        # Error rate (0-2 bins)
+        error = metrics_dict.get('error_rate_percent', 0)
+        error_bin = min(2, int(error / 5)) if error is not None else 0  # 5% buckets
+        encoded.append(error_bin)
+        
+        # Request rate (0-4 bins)
+        rps = metrics_dict.get('request_rate_per_second', 0)
+        rps_bin = min(4, int(rps / 50)) if rps is not None else 0  # 50 rps buckets
+        encoded.append(rps_bin)
+        
+        return tuple(encoded)
+
+    def _discretize_metrics(self, metrics_dict: Dict[str, float]) -> Tuple[int, ...]:
+        """Discretize metrics using fitted discretizers"""
+        encoded = []
+        
         for metric_name in sorted(self.metric_bins.keys()):
-            value = aggregated_metrics.get(metric_name)
-
-            if value is not None and metric_name in self.discretizers:
+            value = metrics_dict.get(metric_name)
+            
+            if value is not None:
                 try:
                     # Check if discretizer is fitted
                     check_is_fitted(self.discretizers[metric_name])
-                    discretized = self.discretizers[metric_name].transform([[value]])[0, 0]
-                    state_components.append(np.float64(discretized))
+                    discretized = self.discretizers[metric_name].transform([[value]])[0][0]
+                    encoded.append(int(discretized))
                 except NotFittedError:
                     fallback = self.metric_bins[metric_name] // 2
                     rl_logger.logger.warning(f"Discretizer for {metric_name} not fitted. Using fallback bin {fallback}. Value: {value}")
-                    state_components.append(fallback)
+                    encoded.append(fallback)
                 except Exception as e:
                     fallback = self.metric_bins[metric_name] // 2
                     rl_logger.log_error(f"Error discretizing {metric_name}: {value}, falling back to bin {fallback}", e)
-                    state_components.append(fallback)
+                    encoded.append(fallback)
             else:
                 # Use middle bin for missing values
                 fallback = self.metric_bins[metric_name] // 2
-                rl_logger.logger.debug(f"No value for {metric_name}. Using fallback bin {fallback}")
-                state_components.append(fallback)
-
-        # Add service count and load distribution metrics
-        state_components.extend(self._encode_system_state(service_metrics))
-
-        encoded_state = tuple(state_components)
-        self.state_cache[state_key] = encoded_state
-        rl_logger.log_state_encoding(aggregated_metrics, encoded_state)
-
-        return encoded_state
-
-    # Remainder of class is unchanged (utility methods, aggregation)
+                rl_logger.logger.debug(f"Missing value for {metric_name}, using fallback bin {fallback}")
+                encoded.append(fallback)
+        
+        return tuple(encoded)
+    
+    def _cleanup_state_cache(self, current_time: float):
+        """Clean expired entries from state cache"""
+        expired_keys = [
+            k for k, (_, cache_time) in self.state_cache.items() 
+            if current_time - cache_time > 10.0
+        ]
+        for k in expired_keys[:100]:  # Remove up to 100 expired entries
+            self.state_cache.pop(k, None)
+        
+        rl_logger.logger.debug(f"Cleaned {len(expired_keys)} expired state cache entries")
 
     def _extract_metrics_dict(self, metric: ServiceMetrics) -> Dict[str, Optional[float]]:
         return {

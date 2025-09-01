@@ -1,0 +1,237 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-bit-config
+  namespace: logging
+  labels:
+    app: fluent-bit
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush        1
+        Daemon       Off
+        Log_Level    info
+        Parsers_File parsers.conf
+        HTTP_Server  On
+        HTTP_Listen  0.0.0.0
+        HTTP_Port    2020
+
+    [INPUT]
+        Name              tail
+        Path              /var/log/containers/*.log
+        Exclude_Path      /var/log/containers/*_fluent-bit-*.log
+        Tag               kube.var.log.containers.*
+        Parser_Firstline  cri
+        multiline.parser  java_cri_multiline
+        Mem_Buf_Limit     10MB
+        Skip_Long_Lines   On
+        Refresh_Interval  5
+        Rotate_Wait       30
+        DB                /var/log/flb_kube.db
+        DB.Sync           Normal
+
+    # Enrich with Kubernetes metadata
+    [FILTER]
+        Name   kubernetes
+        Match  kube.*
+        Kube_URL           https://kubernetes.default.svc:443
+        Merge_Log          Off
+        Keep_Log           On
+        Annotations        Off
+        Labels             On
+        Use_Kubelet        Off
+        use_tag_for_meta   On
+        Kube_CA_File       /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        Kube_Token_File    /var/run/secrets/kubernetes.io/serviceaccount/token
+        Kube_Tag_Prefix    kube.var.log.containers.
+        Buffer_Size        50
+
+    # Clean CRI prefix ("<ts> stdout F ") from log line before parsing
+    [FILTER]
+        Name           lua
+        Match          kube.*
+        script         filters.lua
+        call           clean_cri_prefix
+
+    # Parse Spring Boot application log line into structured fields
+    [FILTER]
+        Name           parser
+        Match          kube.*
+        Key_Name       log
+        Parser         spring_boot_unified
+        Parser         spring_boot_bracket_nomillis
+        Parser         spring_boot_bracket_t_nomillis
+        Parser         spring_boot_bracket
+        Parser         spring_boot_bracket_t
+        Parser         rl_agent_pipe
+        Reserve_Data   On
+        Preserve_Key   On
+
+    # Enrich with a normalized 'service' field and ensure k8s identifiers
+    [FILTER]
+        Name           lua
+        Match          kube.*
+        script         filters.lua
+        call           enrich_service
+
+    # Only keep logs from ai-loadbalancer namespace (use flat field from enrich_service)
+    [FILTER]
+        Name    grep
+        Match   kube.*
+        Regex   namespace ^ai-loadbalancer$
+
+    # Route to OpenSearch
+    [OUTPUT]
+        Name            es
+        Match           kube.*
+        Host            opensearch.logging.svc.cluster.local
+        Port            9200
+        Logstash_Format On
+        Logstash_Prefix logs-ai-loadbalancer
+        Time_Key        @timestamp
+        Suppress_Type_Name On
+        Replace_Dots    On
+        Trace_Error     On
+        Retry_Limit     False
+        tls             Off
+
+  parsers.conf: |
+    [PARSER]
+        Name        cri
+        Format      regex
+        Regex       ^(?<time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z) (?<stream>stdout|stderr) (?<logtag>[FP]) (?<log>.*)$
+        Time_Key    time
+        Time_Format %Y-%m-%dT%H:%M:%S.%LZ
+
+    # Load balancer format: "2025-09-01T13:46:41.105Z  INFO 1 --- [load-balancer] [nio-8080-exec-7] c.b.l.c.LoadBalancerController : message"
+    [PARSER]
+        Name        spring_boot_unified
+        Format      regex
+        Regex       ^(?<time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[\.,]\d{3}Z?)\s+(?<level>TRACE|DEBUG|INFO|WARN|ERROR)\s+(?<pid>\d+)\s+---\s+(?:\[(?<appctx>[^\]]+)\]\s+)?\[(?<thread>[^\]]+)\]\s+(?<logger>\S+)\s+:\s+(?<message>.*)$
+        Time_Key    time
+        Time_Format %Y-%m-%dT%H:%M:%S.%L
+
+    # Spring format without milliseconds with traceId: "YYYY-MM-DD HH:MM:SS [thread] LEVEL [traceId] logger - message"
+    [PARSER]
+        Name        spring_boot_bracket_nomillis
+        Format      regex
+        Regex       ^(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+\[(?<thread>[^\]]+)\]\s+(?<level>TRACE|DEBUG|INFO|WARN|ERROR)\s+\[(?<traceId>[^\]]*)\]\s+(?<logger>\S+)\s+[-:]\s+(?<message>.*)\s*$
+        Time_Key    time
+        Time_Format %Y-%m-%d %H:%M:%S
+
+    # Spring format with T separator without milliseconds with traceId: "YYYY-MM-DDTHH:MM:SS [thread] LEVEL [traceId] logger - message"
+    [PARSER]
+        Name        spring_boot_bracket_t_nomillis
+        Format      regex
+        Regex       ^(?<time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\s+\[(?<thread>[^\]]+)\]\s+(?<level>TRACE|DEBUG|INFO|WARN|ERROR)\s+\[(?<traceId>[^\]]*)\]\s+(?<logger>\S+)\s+[-:]\s+(?<message>.*)\s*$
+        Time_Key    time
+        Time_Format %Y-%m-%dT%H:%M:%S
+
+    # Spring format with milliseconds and traceId: "YYYY-MM-DD HH:MM:SS.sss [thread] LEVEL [traceId] logger - message"
+    [PARSER]
+        Name        spring_boot_bracket
+        Format      regex
+        Regex       ^(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:[\.,]\d{3})?)\s+\[(?<thread>[^\]]+)\]\s+(?<level>TRACE|DEBUG|INFO|WARN|ERROR)\s+\[(?<traceId>[^\]]*)\]\s+(?<logger>\S+)\s+[-:]\s+(?<message>.*)\s*$
+        Time_Key    time
+        Time_Format %Y-%m-%d %H:%M:%S.%L
+
+    # Spring format with T separator and milliseconds with traceId: "YYYY-MM-DDTHH:MM:SS.sss [thread] LEVEL [traceId] logger - message"
+    [PARSER]
+        Name        spring_boot_bracket_t
+        Format      regex
+        Regex       ^(?<time>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:[\.,]\d{3})?)\s+\[(?<thread>[^\]]+)\]\s+(?<level>TRACE|DEBUG|INFO|WARN|ERROR)\s+\[(?<traceId>[^\]]*)\]\s+(?<logger>\S+)\s+[-:]\s+(?<message>.*)\s*$
+        Time_Key    time
+        Time_Format %Y-%m-%dT%H:%M:%S.%L
+
+    # RL-agent pipe-separated format with trace ID: "YYYY-MM-DD HH:MM:SS | LEVEL | rl_agent | [trace_id] | message"
+    [PARSER]
+        Name        rl_agent_pipe
+        Format      regex
+        Regex       ^(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:[\.,]\d{3})?)\s+\|\s+(?<level>TRACE|DEBUG|INFO|WARN|ERROR)\s+\|\s+(?<logger>[^|]+)\s+\|\s+\[(?<traceId>[^\]]*)\]\s+\|\s+(?<message>.*)$
+        Time_Key    time
+        Time_Format %Y-%m-%d %H:%M:%S
+
+    [MULTILINE_PARSER]
+        Name          java_multiline
+        Type          regex
+        Flush_Timeout 5000
+        # First line starts with timestamp; subsequent lines are stack frames or causes
+        Rule          "start_state"   "/^(\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}:\\d{2}[\\.,]\\d{3}).*/"  "cont"
+        Rule          "cont"          "/^(\s+at\s+|Caused by:|Suppressed:|\t|\s{2,}|\.{3} \d+ more).*/"  "cont"
+
+    [MULTILINE_PARSER]
+        Name          java_cri_multiline
+        Type          regex
+        Flush_Timeout 5000
+        # Start when a CRI line contains an application timestamp after "stdout|stderr F"
+        Rule          "start_state"   "/^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[\.,]\d+)?Z?)\s+(stdout|stderr)\s+[FP]\s+\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}.*/"  "cont"
+        # Continuation: stack frames, causes, indented lines
+        Rule          "cont"          "/^(\s+at\s+|Caused by:|Suppressed:|\t|\s{2,}|\.{3} \d+ more).*/"  "cont"
+
+    [MULTILINE_PARSER]
+        Name          python_traceback
+        Type          regex
+        Flush_Timeout 2000
+        Rule          "start_state" "/^(Traceback \(most recent call last\):|INFO:|ERROR:|WARNING:|DEBUG:)/" "cont"
+        Rule          "cont"        "/^\s+File \".*\", line \d+, in /" "cont"
+
+  filters.lua: |
+    local function first_non_nil(a, b, c, d)
+      if a ~= nil and a ~= '' then return a end
+      if b ~= nil and b ~= '' then return b end
+      if c ~= nil and c ~= '' then return c end
+      if d ~= nil and d ~= '' then return d end
+      return nil
+    end
+
+    -- Remove CRI prefix like: "2025-09-01T08:20:58.317985053Z stdout F "
+    function clean_cri_prefix(tag, timestamp, record)
+      local msg = record["log"]
+      if type(msg) == 'string' then
+        -- Match and remove: YYYY-MM-DDTHH:MM:SS.nnnnnnnnnZ stdout F 
+        local cleaned = msg:gsub("^%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d:%d%d%.%d+Z%s+stdout%s+F%s+", "")
+        -- Also handle stderr
+        if cleaned == msg then
+          cleaned = msg:gsub("^%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d:%d%d%.%d+Z%s+stderr%s+F%s+", "")
+        end
+        -- Handle space separator instead of T
+        if cleaned == msg then
+          cleaned = msg:gsub("^%d%d%d%d%-%d%d%-%d%d%s+%d%d:%d%d:%d%d%.%d+Z%s+stdout%s+F%s+", "")
+        end
+        if cleaned == msg then
+          cleaned = msg:gsub("^%d%d%d%d%-%d%d%-%d%d%s+%d%d:%d%d:%d%d%.%d+Z%s+stderr%s+F%s+", "")
+        end
+        record["log"] = cleaned
+      end
+      return 1, timestamp, record
+    end
+
+    function enrich_service(tag, timestamp, record)
+      -- Kubernetes metadata
+      local k8s = record["kubernetes"] or {}
+      local labels = k8s["labels"] or {}
+      local pod = k8s["pod_name"] or record["kubernetes.pod_name"]
+      local ns = k8s["namespace_name"] or record["kubernetes.namespace_name"]
+      local container = k8s["container_name"] or record["kubernetes.container_name"]
+
+      -- Common label keys for service/app name
+      local app = labels["app"] or labels["app_kubernetes_io_name"] or labels["app.kubernetes.io/name"]
+
+      -- From parser (optional app context)
+      local appctx = record["appctx"]
+
+      -- Derive service
+      local service = first_non_nil(record["service"], app, appctx, container)
+
+      if service ~= nil then record["service"] = service end
+      if pod ~= nil then record["pod"] = pod end
+      if ns ~= nil then record["namespace"] = ns end
+      if appctx ~= nil then record["service_context"] = appctx end
+
+      -- Normalize log level casing if present
+      if record["level"] ~= nil and type(record["level"]) == 'string' then
+        record["level"] = string.upper(record["level"])
+      end
+
+      return 1, timestamp, record
+    end

@@ -219,12 +219,15 @@ class RLTrainingLoadTester:
                     product = random.choice(products)
                     success, latency = self.add_to_cart(headers, product, cart_items)
                 elif action == 'order':
-                    if cart_items:
+                    # Ensure server-side cart has items even if local list is empty
+                    ensured = self.ensure_server_cart_has_items(headers)
+                    if ensured:
                         success, latency = self.create_order(headers, cart_items)
                         if success:
                             cart_items.clear()
                     else:
-                        success, latency = True, 0.0  # Skip if no cart items
+                        # Could not ensure cart; skip order gracefully
+                        success, latency = True, 0.0
                 else:
                     success, latency = self.get_user_profile_info(headers)
                 
@@ -478,8 +481,71 @@ class RLTrainingLoadTester:
         except Exception:
             return False, time.time() - start_time
     
+    def get_server_cart(self, headers: Dict[str, str]) -> tuple:
+        """Fetch the server-side cart to validate actual cart contents"""
+        start_time = time.time()
+        try:
+            response = self.get_session().get(
+                f"{self.base_url}/cart-service/api/cart",
+                headers=headers,
+                timeout=self.config['base_config']['request_timeout']
+            )
+            latency = time.time() - start_time
+            if response.status_code == 200:
+                return True, latency, response.json()
+            return False, latency, None
+        except Exception:
+            return False, time.time() - start_time, None
+
+    def ensure_server_cart_has_items(self, headers: Dict[str, str], fallback_sku: str = "LAPTOP-001") -> bool:
+        """Ensure the server cart has at least one valid item. If empty, add a default item without error injection."""
+        ok, _, cart = self.get_server_cart(headers)
+        if ok and cart and cart.get('totalItems', 0) > 0:
+            return True
+
+        # Cart empty or fetch failed: try to add a safe, valid item deterministically (no error injection)
+        try:
+            # Verify product exists
+            inv_resp = self.get_session().get(
+                f"{self.base_url}/inventory-service/api/inventory/products/{fallback_sku}",
+                headers=headers,
+                timeout=self.config['base_config']['request_timeout']
+            )
+            if inv_resp.status_code != 200:
+                return False
+
+            product_names = {
+                "LAPTOP-001": "Dell XPS 13 Laptop",
+                "PHONE-001": "iPhone 15 Pro",
+                "TABLET-001": "iPad Air 5th Gen",
+                "WATCH-001": "Apple Watch Series 9"
+            }
+            unit_price = random.uniform(99.99, 1999.99)
+            safe_cart_data = {
+                "productId": fallback_sku,
+                "productSku": fallback_sku,
+                "productName": product_names.get(fallback_sku, f"Product {fallback_sku}"),
+                "quantity": 1,
+                "price": unit_price,
+                "unitPrice": unit_price
+            }
+            add_resp = self.get_session().post(
+                f"{self.base_url}/cart-service/api/cart/items",
+                json=safe_cart_data,
+                headers=headers,
+                timeout=self.config['base_config']['request_timeout']
+            )
+            if add_resp.status_code not in [200, 201]:
+                return False
+
+            # Re-check cart
+            ok2, _, cart2 = self.get_server_cart(headers)
+            return bool(ok2 and cart2 and cart2.get('totalItems', 0) > 0)
+        except Exception:
+            return False
+
     def create_order(self, headers: Dict[str, str], cart_items: List) -> tuple:
-        """Create order from cart items with correct DTO structure"""
+        """Create order relying on server-side cart; send required shippingAddress and notes only"""
         start_time = time.time()
         try:
             # Realistic shipping addresses
@@ -489,37 +555,16 @@ class RLTrainingLoadTester:
                 {"street": "789 Pine Rd", "city": "Chicago", "state": "IL", "zipCode": "60601", "country": "US"}
             ]
             
-            # Create order items with correct structure
-            product_names = {
-                "LAPTOP-001": "Dell XPS 13 Laptop",
-                "PHONE-001": "iPhone 15 Pro",
-                "TABLET-001": "iPad Air 5th Gen",
-                "WATCH-001": "Apple Watch Series 9"
-            }
-            
-            order_items = []
-            for product_sku in cart_items[:3]:  # Limit to 3 items
-                product_name = product_names.get(product_sku, f"Product {product_sku}")
-                unit_price = random.uniform(99.99, 999.99)
-                quantity = random.randint(1, 2)
-                
-                order_items.append({
-                    "productId": product_sku,
-                    "productSku": product_sku,
-                    "productName": product_name,
-                    "quantity": quantity,
-                    "unitPrice": unit_price,
-                    "totalPrice": unit_price * quantity
-                })
-            
-            # Simulate order errors
+            # Simulate order errors; if not injecting, omit items to rely on server cart
             if self.should_inject_error('order_errors'):
-                order_data = self.generate_malformed_order_data(order_items, addresses)
+                # Keep building minimal items list to satisfy malformed generator expectations
+                minimal_items = [{"productId": cart_items[0]}] if cart_items else []
+                order_data = self.generate_malformed_order_data(minimal_items, addresses)
             else:
                 order_data = {
-                    "items": order_items,
                     "shippingAddress": random.choice(addresses),
-                    "notes": "RL Training Load Test Order"
+                    "notes": "RL Training Load Test Order",
+                    "items": []
                 }
             
             response = self.get_session().post(

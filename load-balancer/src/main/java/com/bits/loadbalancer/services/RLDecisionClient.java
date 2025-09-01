@@ -1,6 +1,7 @@
 package com.bits.loadbalancer.services;
 
 import com.bits.loadbalancer.metrics.LoadBalancerMetrics;
+import com.bits.commomutil.tracing.TraceUtils;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
@@ -50,10 +51,15 @@ public class RLDecisionClient {
     public Mono<RoutingDecision> getRoutingDecision(String serviceName, String requestPath) {
         RoutingRequest request = new RoutingRequest(serviceName, requestPath);
         
-        logger.debug("Requesting RL decision for service: {}, path: {}, URL: {}/decide", serviceName, requestPath, rlApiBaseUrl);
+        // Get current trace ID from MDC
+        String traceId = TraceUtils.getTraceId();
+        
+        logger.debug("Requesting RL decision for service: {}, path: {}, traceId: {}, URL: {}/decide", 
+                    serviceName, requestPath, traceId, rlApiBaseUrl);
         
         return webClient.post()
                 .uri("/decide")
+                .header(TraceUtils.TRACE_ID_HEADER, traceId)
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(RoutingDecision.class)
@@ -75,11 +81,15 @@ public class RLDecisionClient {
      */
     public void provideFeedback(String serviceName, String selectedPod, double responseTimeMs, 
                                int statusCode, boolean errorOccurred) {
-        logger.debug("Sending feedback for service: {}, pod: {}, responseTime: {}ms, status: {}, URL: {}/feedback", 
-            serviceName, selectedPod, responseTimeMs, statusCode, rlApiBaseUrl);
+        // Get current trace ID from MDC
+        String traceId = TraceUtils.getTraceId();
+        
+        logger.debug("Sending feedback for service: {}, pod: {}, responseTime: {}ms, status: {}, traceId: {}, URL: {}/feedback", 
+            serviceName, selectedPod, responseTimeMs, statusCode, traceId, rlApiBaseUrl);
             
         webClient.post()
                 .uri("/feedback")
+                .header(TraceUtils.TRACE_ID_HEADER, traceId)
                 .bodyValue(new FeedbackRequest(serviceName, selectedPod, responseTimeMs, statusCode, errorOccurred))
                 .retrieve()
                 .bodyToMono(String.class)
@@ -190,6 +200,9 @@ public class RLDecisionClient {
         
         @JsonProperty("timestamp")
         public String timestamp;
+        
+        @JsonProperty("trace_id")
+        public String traceId;
     }
     
     public static class FeedbackRequest {

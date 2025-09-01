@@ -1,10 +1,12 @@
 import random
-from typing import List, Tuple, Dict, Any
 import numpy as np
-
-from models.metrics_model import ServiceInstance
+import logging
+from typing import List, Dict, Tuple, Any
 from config.rl_settings import rl_settings
+from models.metrics_model import ServiceInstance
 from utils.rl_logger import rl_logger
+
+logger = logging.getLogger(__name__)
 
 class ActionSelector:
     """
@@ -62,13 +64,19 @@ class ActionSelector:
         Returns:
             Selected action
         """
+        import time
+        start_time = time.time()
+        
         if not available_actions:
             raise ValueError("No available actions for selection")
 
         # Adaptive epsilon based on episode progress
+        step_start = time.time()
         adaptive_epsilon = self._calculate_adaptive_epsilon(epsilon, episode)
+        epsilon_time = (time.time() - step_start) * 1000
 
         # Epsilon-greedy selection with enhancements
+        step_start = time.time()
         if random.random() < adaptive_epsilon:
             # Exploration: Choose action based on exploration strategy
             action = self._exploration_strategy(available_actions, state_key, q_table)
@@ -77,8 +85,10 @@ class ActionSelector:
             # Exploitation: Choose best known action
             action = self._exploitation_strategy(state_key, q_table, available_actions)
             selection_type = "exploitation"
+        strategy_time = (time.time() - step_start) * 1000
 
         # Log action selection
+        step_start = time.time()
         q_values = {
             action: q_table.get((state_key, action), 0.0)
             for action in available_actions
@@ -96,6 +106,10 @@ class ActionSelector:
             'selection_type': selection_type,
             'available_actions_count': len(available_actions)
         })
+        logging_time = (time.time() - step_start) * 1000
+        
+        total_time = (time.time() - start_time) * 1000
+        logger.debug(f"ACTION_SELECTOR_TIMING: {total_time:.2f}ms total (epsilon: {epsilon_time:.2f}ms, strategy: {strategy_time:.2f}ms, logging: {logging_time:.2f}ms)")
 
         return action
 
@@ -107,19 +121,25 @@ class ActionSelector:
             base_epsilon * (self.config.epsilon_decay ** episode)
         )
 
-        # Additional adaptations
+        # Additional adaptations for better load balancing
 
-        # 1. Boost exploration if performance is stagnating
+        # 1. Boost exploration if performance is stagnating OR low diversity
         if len(self.action_history) > 50:
             recent_diversity = self._calculate_action_diversity()
-            if recent_diversity < 0.3:  # Low diversity threshold
-                decayed_epsilon = min(1.0, decayed_epsilon * 1.5)
+            if recent_diversity < 0.4:  # Increased diversity threshold for load balancing
+                decayed_epsilon = min(1.0, decayed_epsilon * 2.0)  # Stronger boost
 
-        # 2. Reduce exploration in later episodes if performing well
+        # 2. Maintain minimum exploration for load balancing
+        min_epsilon_for_balancing = 0.05  # Always maintain 5% exploration
+        decayed_epsilon = max(min_epsilon_for_balancing, decayed_epsilon)
+
+        # 3. Reduce exploration only if diversity is maintained
         if episode > self.config.exploration_episodes:
+            recent_diversity = self._calculate_action_diversity()
             performance_score = self._get_recent_performance_score()
-            if performance_score > 0.8:  # High performance threshold
-                decayed_epsilon *= 0.5
+            # More stringent diversity requirement for load balancing
+            if performance_score > 0.8 and recent_diversity > 0.7:  # Increased diversity threshold
+                decayed_epsilon *= 0.8  # Less aggressive reduction to maintain exploration
 
         return decayed_epsilon
 
@@ -156,7 +176,7 @@ class ActionSelector:
                                q_table: Dict[Tuple, float],
                                available_actions: List[str]) -> str:
         """
-        Enhanced exploitation strategy with tie-breaking.
+        Enhanced exploitation strategy with aggressive load balancing.
         """
         # Get Q-values for all available actions
         action_q_values = []
@@ -167,34 +187,52 @@ class ActionSelector:
         # Sort by Q-value (descending)
         action_q_values.sort(key=lambda x: x[1], reverse=True)
 
-        # Handle ties by considering additional factors
+        # Enhanced tie-breaking with aggressive load balancing
         max_q_value = action_q_values[0][1]
+        
+        # Use much wider tolerance for "best" actions to encourage distribution
+        tolerance = max(0.2, abs(max_q_value) * 0.15)  # Increased to 15% tolerance or minimum 0.2
         best_actions = [
             action for action, q_value in action_q_values
-            if abs(q_value - max_q_value) < 1e-6
+            if abs(q_value - max_q_value) <= tolerance
         ]
+
+        # If only one action is "best", still check for load balancing override
+        if len(best_actions) == 1:
+            # Check if this action has been used too frequently
+            recent_actions = [h['action'] for h in self.action_history[-10:]]
+            if len(recent_actions) >= 5:
+                best_action_usage = recent_actions.count(best_actions[0])
+                if best_action_usage >= 4:  # Used 4+ times in last 10 decisions
+                    # Force load balancing - expand to top 2-3 actions
+                    expanded_best = [action for action, _ in action_q_values[:min(3, len(action_q_values))]]
+                    best_actions = expanded_best
+                    logger.info(f"Load balancing override: expanding from {best_actions[0]} to {best_actions}")
 
         if len(best_actions) == 1:
             return best_actions[0]
 
-        # Tie-breaking strategies
+        # Aggressive load balancing strategies
 
-        # 1. Prefer less recently used actions among the best
-        recent_actions = [h['action'] for h in self.action_history[-10:]]
-        less_recent_best = [
+        # 1. Strongly prefer least recently used actions
+        recent_actions = [h['action'] for h in self.action_history[-15:]]  # Shorter window for more aggressive balancing
+        action_usage_counts = {}
+        for action in recent_actions:
+            action_usage_counts[action] = action_usage_counts.get(action, 0) + 1
+        
+        # Find actions with minimum recent usage
+        min_usage = min(action_usage_counts.get(action, 0) for action in best_actions)
+        least_used_best = [
             action for action in best_actions
-            if action not in recent_actions
+            if action_usage_counts.get(action, 0) == min_usage
         ]
 
-        if less_recent_best:
-            return random.choice(less_recent_best)
+        if least_used_best:
+            selected = random.choice(least_used_best)
+            logger.debug(f"Load balancing: selected {selected} (usage: {action_usage_counts.get(selected, 0)}) from {best_actions}")
+            return selected
 
-        # 2. Prefer actions with better historical performance
-        best_performer = self._get_best_performing_action(best_actions)
-        if best_performer:
-            return best_performer
-
-        # 3. Random tie-breaking
+        # 2. Fallback: Random selection among best actions
         return random.choice(best_actions)
 
     def _ucb_selection(self,

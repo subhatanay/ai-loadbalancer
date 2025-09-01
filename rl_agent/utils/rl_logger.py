@@ -4,6 +4,19 @@ from pathlib import Path
 from typing import Optional
 import json
 from datetime import datetime
+import contextvars
+
+# Context variable for trace ID
+trace_id_context = contextvars.ContextVar('trace_id', default='')
+
+class TraceFormatter(logging.Formatter):
+    """Custom formatter that includes trace ID from context"""
+    
+    def format(self, record):
+        # Get trace ID from context variable
+        trace_id = trace_id_context.get('')
+        record.trace_id = trace_id if trace_id else '-'
+        return super().format(record)
 
 class RLLogger:
     """Enhanced logger for RL Agent with structured logging"""
@@ -19,9 +32,9 @@ class RLLogger:
         # Clear existing handlers
         self.logger.handlers.clear()
 
-        # Create formatters
-        detailed_formatter = logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
+        # Create formatters with trace ID support
+        detailed_formatter = TraceFormatter(
+            '%(asctime)s | %(levelname)-8s | %(name)s | [%(trace_id)s] | %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
 
@@ -109,6 +122,19 @@ class RLLogger:
             f"Epsilon: {epsilon:.4f} | "
             f"Q-table size: {q_table_size}"
         )
+
+# Utility functions for trace ID management
+def set_trace_id(trace_id: str):
+    """Set trace ID in context for current request"""
+    trace_id_context.set(trace_id)
+
+def get_trace_id() -> str:
+    """Get current trace ID from context"""
+    return trace_id_context.get('')
+
+def clear_trace_id():
+    """Clear trace ID from context"""
+    trace_id_context.set('')
 
 # Global logger instance
 rl_logger = RLLogger()

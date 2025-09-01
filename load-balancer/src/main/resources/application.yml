@@ -44,6 +44,9 @@ logging:
   level:
     com.bits.loadbalancer: INFO
     org.springframework.web: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId:-}] %logger{36} - %msg%n"
 
 loadbalancer:
   routing-strategy: ${LOAD_BALANCER_ROUTING_STRATEGY:round-robin}

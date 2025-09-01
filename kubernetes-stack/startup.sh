@@ -41,7 +41,8 @@ kubectl apply -f config-yaml/notification-service.yaml
 kubectl apply -f config-yaml/cluster-role.yaml
 kubectl apply -f config-yaml/prometheus-rbac.yaml
 kubectl apply -f config-yaml/prometheus.yaml
-kubectl apply -f config-yaml/grafana-dashboard-provisioning.yaml
+kubectl apply -f config-yaml/grafana.yaml
+kubectl apply -f config-yaml/grafana-dashboards.yaml
 # Conditionally apply RL-collector deployment
 if [ "$ENABLE_RL_COLLECTOR" = true ]; then
   echo "Deploying RL-collector..."

@@ -40,20 +40,29 @@ class PrometheusClient:
 
     def get_service_metrics(self, service_instances: List) -> List[ServiceMetrics]:
         """Collect comprehensive metrics for all service instances"""
+        import time
+        start_time = time.time()
+        
         logger.info("Starting metrics collection", total_instances=len(service_instances))
 
         all_metrics = []
 
         for instance in service_instances:
             try:
+                instance_start = time.time()
                 service_metrics = self._collect_instance_metrics(instance)
+                instance_time = (time.time() - instance_start) * 1000
+                
                 if service_metrics:
                     all_metrics.append(service_metrics)
+                    logger.debug(f"Instance metrics collected in {instance_time:.2f}ms for {instance.instance_id}")
 
             except Exception as e:
                 logger.error("Failed to collect metrics for instance",
                              instance=instance.instance_id, error=str(e))
 
+        total_time = (time.time() - start_time) * 1000
+        logger.info(f"PROMETHEUS_TIMING: {total_time:.2f}ms total for {len(service_instances)} instances")
         return all_metrics
 
     def _collect_instance_metrics(self, instance) -> Optional[ServiceMetrics]:

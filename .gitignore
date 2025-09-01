@@ -113,7 +113,16 @@ ipython_config.py
 *.pt
 *.pth
 *.model
-models/
+models/*.pkl
+models/*.joblib
+models/*.h5
+models/*.pb
+models/*.onnx
+models/*.pt
+models/*.pth
+models/*.model
+!models/metrics_model.py
+!models/__init__.py
 checkpoints/
 experiments/
 wandb/

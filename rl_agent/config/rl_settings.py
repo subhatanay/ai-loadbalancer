@@ -79,3 +79,6 @@ class RLAgentSettings:
 
 # Global settings instance
 rl_settings = RLAgentSettings()
+
+# Alias for backward compatibility
+RLConfig = RLAgentSettings

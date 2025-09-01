@@ -101,8 +101,8 @@ logging:
     org.hibernate.SQL: ${SQL_LOG_LEVEL:WARN}
     org.hibernate.type.descriptor.sql.BasicBinder: ${SQL_LOG_LEVEL:WARN}
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{traceId:-}] %logger{36} - %msg%n"
   file:
     name: logs/inventory-service.log
     max-size: 10MB
@@ -126,3 +126,10 @@ management:
       application: ${spring.application.name}
       service: inventory-service
       podname: ${HOSTNAME:unknown}
+  tracing:
+    sampling:
+      probability: 1.0
+    export:
+      zipkin:
+        endpoint: ${ZIPKIN_ENDPOINT:http://zipkin:9411/api/v2/spans}
+    enabled: true

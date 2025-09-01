@@ -2,6 +2,7 @@ import numpy as np
 from typing import Dict, List, Tuple, Any, Optional
 from collections import defaultdict
 import time
+import hashlib
 
 from models.metrics_model import ServiceMetrics, ServiceInstance
 from cpu.state_encoder import StateEncoder
@@ -46,8 +47,10 @@ class QLearningAgent:
         # Caching for performance
         self.state_cache = {}
         self.action_cache = {}
+        self.action_cache_ttl = 2.0  # 2 second cache for actions
+        self.state_cache_ttl = 3.0   # 3 second cache for states
 
-        rl_logger.logger.info("Q-Learning Agent initialized")
+        rl_logger.logger.info(f"Q-Learning Agent initialized with caching (action_ttl={self.action_cache_ttl}s, state_ttl={self.state_cache_ttl}s)")
 
     def initialize(self,
                    historical_metrics: Optional[List[ServiceMetrics]] = None,
@@ -90,7 +93,17 @@ class QLearningAgent:
         Returns:
             Selected action (instance ID)
         """
-        # Encode current state
+        # Fast path: Check action cache first
+        cache_key = self._get_action_cache_key(current_metrics, available_instances)
+        current_time = time.time()
+        
+        if cache_key in self.action_cache:
+            cached_action, cache_time = self.action_cache[cache_key]
+            if current_time - cache_time < self.action_cache_ttl:
+                rl_logger.logger.debug(f"Action cache hit for key: {cache_key}")
+                return cached_action
+        
+        # Encode current state (with caching)
         state_key = self.state_encoder.encode_state(current_metrics)
 
         # Get available actions
@@ -112,8 +125,55 @@ class QLearningAgent:
         self.previous_state = self.current_state
         self.current_state = state_key
         self.last_action = selected_action
+        
+        # Cache the selected action
+        self.action_cache[cache_key] = (selected_action, current_time)
+        
+        # Periodic cache cleanup
+        if len(self.action_cache) > 100:
+            self._cleanup_action_cache(current_time)
 
         return selected_action
+    
+    def _get_action_cache_key(self, metrics: List[ServiceMetrics], instances: List[ServiceInstance]) -> str:
+        """Generate cache key for action caching"""
+        try:
+            # Simple hash based on key metrics and instance count for fast caching
+            key_parts = [str(len(instances))]
+            
+            # Use only first metric for speed and round values for better cache hits
+            if metrics and len(metrics) > 0:
+                m = metrics[0]
+                if hasattr(m, 'cpu_usage_percent') and m.cpu_usage_percent is not None:
+                    key_parts.append(f"cpu:{int(m.cpu_usage_percent/10)*10}")  # Round to 10%
+                if hasattr(m, 'avg_response_time_ms') and m.avg_response_time_ms is not None:
+                    key_parts.append(f"rt:{int(m.avg_response_time_ms/100)*100}")  # Round to 100ms
+                if hasattr(m, 'request_rate_per_second') and m.request_rate_per_second is not None:
+                    key_parts.append(f"rps:{int(m.request_rate_per_second/20)*20}")  # Round to 20 rps
+            
+            # Add instance identifiers for cache key uniqueness
+            instance_ids = []
+            for inst in instances[:3]:  # Only use first 3 instances for speed
+                if hasattr(inst, 'instance_id'):
+                    instance_ids.append(inst.instance_id[-4:])  # Last 4 chars
+                elif hasattr(inst, 'instanceName'):
+                    instance_ids.append(inst.instanceName[-4:])
+            
+            key_parts.extend(instance_ids)
+            return "|".join(key_parts)
+        except Exception:
+            return f"fallback:{len(instances)}:{int(time.time())}"
+    
+    def _cleanup_action_cache(self, current_time: float):
+        """Clean expired entries from action cache"""
+        expired_keys = [
+            k for k, (_, cache_time) in self.action_cache.items() 
+            if current_time - cache_time > self.action_cache_ttl * 2
+        ]
+        for k in expired_keys[:50]:  # Remove up to 50 expired entries
+            self.action_cache.pop(k, None)
+        
+        rl_logger.logger.debug(f"Cleaned {len(expired_keys)} expired action cache entries")
 
     def update_q_table(self,
                        new_metrics: List[ServiceMetrics],

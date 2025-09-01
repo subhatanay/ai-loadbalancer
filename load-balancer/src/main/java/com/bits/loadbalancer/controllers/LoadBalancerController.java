@@ -1,9 +1,11 @@
 package com.bits.loadbalancer.controllers;
 
 import com.bits.commomutil.models.ServiceInfo;
+import com.bits.commomutil.tracing.TraceUtils;
 import com.bits.loadbalancer.metrics.LoadBalancerMetrics;
 import com.bits.loadbalancer.services.BenchmarkController;
 import com.bits.loadbalancer.services.RoutingStrategyAlgorithm;
+import com.bits.loadbalancer.services.LeastConnectionsLoadBalancer;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +43,9 @@ public class LoadBalancerController {
     
     @Autowired(required = false)
     private BenchmarkController benchmarkController;
+    
+    @Autowired(required = false)
+    private LeastConnectionsLoadBalancer leastConnectionsLoadBalancer;
 
     @RequestMapping(value = "/{serviceName}/**", method = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE})
     public ResponseEntity<?> proxyRequest(
@@ -48,7 +53,11 @@ public class LoadBalancerController {
             HttpServletRequest request,
             @RequestBody(required = false) Object body) {
         
-        logger.info("Proxying request to service: {}", serviceName);
+        // Handle trace ID for request tracking
+        String traceId = TraceUtils.getOrGenerateTraceId(request.getHeader(TraceUtils.TRACE_ID_HEADER));
+        TraceUtils.setTraceId(traceId);
+        
+        logger.info("Proxying request to service: {} [traceId={}]", serviceName, traceId);
 
         // Start metrics collection for proxy request
         Timer.Sample proxyRequestSample = loadBalancerMetrics.startProxyRequest();
@@ -57,10 +66,20 @@ public class LoadBalancerController {
         
         try {
             // Get next healthy instance
+            long decisionStartTime = System.currentTimeMillis();
             targetInstance = routingStrategyAlgorithm.getLoadbalancer().geNextServiceInstance(serviceName);
+            long decisionEndTime = System.currentTimeMillis();
+            logger.info("Routing decision usung {} for service {} took: {}ms", routingStrategyAlgorithm.getRoutingStrategy(), serviceName, (decisionEndTime - decisionStartTime));
 
             if (targetInstance == null) {
+                long responseTime = System.currentTimeMillis() - startTime;
                 loadBalancerMetrics.recordProxyError(serviceName, "no_healthy_instances", "503");
+                
+                // Record benchmark metrics for no healthy instances error
+                if (benchmarkController != null) {
+                    benchmarkController.recordRequest(responseTime, true, request.getRequestURI()); // true = error occurred
+                }
+                
                 Map<String, String> error = new HashMap<>();
                 error.put("error", "No healthy instances available for service: " + serviceName);
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);
@@ -68,17 +87,18 @@ public class LoadBalancerController {
             
             // CRITICAL: Set chosen instance BEFORE processing for RL experience logging
             request.setAttribute("chosenPodInstance", targetInstance.getInstanceName());
-            logger.info("Selected instance {} for service {}", targetInstance.getInstanceName(), serviceName);
+            logger.debug("Selected instance {} for service {}", targetInstance.getInstanceName(), serviceName);
             
             // Record pod request metrics
             loadBalancerMetrics.recordPodRequest(serviceName, targetInstance.getInstanceName());
             
             // Build URI properly to avoid encoding issues
             URI targetUri = buildTargetUri(request, serviceName, targetInstance);
-            logger.info("Forwarding request to: {}", targetUri);
+            logger.debug("Forwarding request to: {}", targetUri);
             
-            // Copy headers
+            // Copy headers and add trace ID
             HttpHeaders headers = copyHeaders(request);
+            headers.set(TraceUtils.TRACE_ID_HEADER, traceId);
             
             // Create HTTP entity
             HttpEntity<Object> entity = new HttpEntity<>(body, headers);
@@ -88,8 +108,11 @@ public class LoadBalancerController {
             logger.debug("******************** HTTP REQUEST {}, HTTP Method: {} *********************", request, method);
 
             // Use String.class to avoid chunked encoding issues with Object.class
+            long forwardStartTime = System.currentTimeMillis();
             ResponseEntity<String> response = restTemplate.exchange(
                     targetUri, method, entity, String.class);
+            long forwardEndTime = System.currentTimeMillis();
+            logger.info("Request forwarding to {} took: {}ms", targetUri, (forwardEndTime - forwardStartTime));
 
             long responseTime = System.currentTimeMillis() - startTime;
             
@@ -110,14 +133,24 @@ public class LoadBalancerController {
 
             // Record benchmark metrics if in benchmark mode
             if (benchmarkController != null) {
-                benchmarkController.recordRequest(responseTime, !response.getStatusCode().is2xxSuccessful());
+                benchmarkController.recordRequest(responseTime, !response.getStatusCode().is2xxSuccessful(), request.getRequestURI());
+            }
+            
+            // Decrement connection count for least connections algorithm
+            if (leastConnectionsLoadBalancer != null && "least-connections".equals(routingStrategyAlgorithm.getRoutingStrategy())) {
+                leastConnectionsLoadBalancer.decrementConnections(targetInstance.getUrl());
             }
 
             // Parse response body as JSON if possible, otherwise return as string
             Object responseBody = parseResponseBody(response.getBody());
             
+            // Add trace ID to response headers
+            HttpHeaders responseHeaders = new HttpHeaders();
+            responseHeaders.putAll(response.getHeaders());
+            responseHeaders.set(TraceUtils.TRACE_ID_HEADER, traceId);
+            
             return ResponseEntity.status(response.getStatusCode())
-                    .headers(response.getHeaders())
+                    .headers(responseHeaders)
                     .body(responseBody);
 
         } catch (Exception e) {
@@ -137,9 +170,27 @@ public class LoadBalancerController {
             // Record proxy error metrics
             loadBalancerMetrics.recordProxyError(serviceName, "request_forwarding_failed", "502");
             
+            // Record benchmark metrics for errors
+            if (benchmarkController != null) {
+                benchmarkController.recordRequest(responseTime, true, request.getRequestURI()); // true = error occurred
+            }
+            
+            // Decrement connection count for least connections algorithm even on error
+            if (targetInstance != null && leastConnectionsLoadBalancer != null && 
+                "least-connections".equals(routingStrategyAlgorithm.getRoutingStrategy())) {
+                leastConnectionsLoadBalancer.decrementConnections(targetInstance.getUrl());
+            }
+            
             Map<String, String> error = new HashMap<>();
             error.put("error", "Failed to forward request: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(error);
+            
+            // Add trace ID to error response
+            HttpHeaders errorHeaders = new HttpHeaders();
+            errorHeaders.set(TraceUtils.TRACE_ID_HEADER, traceId);
+            
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .headers(errorHeaders)
+                    .body(error);
         }
     }
     

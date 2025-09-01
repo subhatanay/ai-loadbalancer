@@ -38,7 +38,7 @@ class LoadBalancerClient:
                         )
                         services.append(service)
 
-            logger.info("Successfully fetched services",
+            logger.debug("Successfully fetched services",
                         total_services=len(services),
                         services=[s.instance_id for s in services])
 

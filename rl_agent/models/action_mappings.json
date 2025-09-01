@@ -1,0 +1,14 @@
+{
+  "cart-service-56c7cf46c4-c754q": 0,
+  "cart-service-56c7cf46c4-wgb6z": 1,
+  "inventory-service-69f7cb5b75-6q4fv": 2,
+  "inventory-service-69f7cb5b75-8phls": 3,
+  "notification-service-84d96d9d6c-b58f5": 4,
+  "notification-service-84d96d9d6c-k8cwv": 5,
+  "order-service-856f9b869b-5l2n5": 6,
+  "order-service-856f9b869b-87bsm": 7,
+  "payment-service-7d7bd59ddb-gsjth": 8,
+  "payment-service-7d7bd59ddb-mk8fb": 9,
+  "user-service-86d6974647-fd892": 10,
+  "user-service-86d6974647-zp8xj": 11
+}

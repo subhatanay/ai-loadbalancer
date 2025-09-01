@@ -123,8 +123,8 @@ logging:
     org.hibernate.SQL: ${SQL_LOG_LEVEL:WARN}
     org.hibernate.type.descriptor.sql.BasicBinder: ${SQL_LOG_LEVEL:WARN}
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-}] %logger{36} - %msg%n"
   file:
     name: logs/payment-service.log
   logback:
@@ -139,16 +139,15 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
-      base-path: /actuator
   endpoint:
     health:
       show-details: always
-      show-components: always
+    prometheus:
+      enabled: true
   metrics:
     export:
       prometheus:
         enabled: true
-        step: 60s
     tags:
       application: ${spring.application.name}
       service: payment-service
@@ -156,4 +155,3 @@ management:
   info:
     env:
       enabled: true
-

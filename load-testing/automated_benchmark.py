@@ -47,6 +47,22 @@ class AutomatedBenchmark:
         self.test_results = {}
         self.stop_traffic = False
         
+    def _wait_for_lb_ready(self, timeout_seconds: int = 180, sleep_seconds: float = 3.0) -> bool:
+        """Poll the health endpoint until it returns 200 OK or timeout."""
+        deadline = time.time() + timeout_seconds
+        url = f"{self.config.load_balancer_url}/actuator/health"
+        last_err = None
+        while time.time() < deadline:
+            try:
+                resp = requests.get(url, timeout=5)
+                if resp.status_code == 200:
+                    return True
+            except Exception as e:
+                last_err = e
+            time.sleep(sleep_seconds)
+        logger.error(f"Load balancer not ready after {timeout_seconds}s: {last_err}")
+        return False
+    
     def run_complete_benchmark(self) -> bool:
         """Run the complete benchmarking process"""
         logger.info("🚀 Starting Automated Load Balancer Benchmark")
@@ -145,6 +161,10 @@ class AutomatedBenchmark:
         sys.path.append('/Users/subhajgh/Documents/bits/final-project/ai-loadbalancer/load-testing')
         
         try:
+            # Ensure LB is reachable before starting long run
+            if not self._wait_for_lb_ready():
+                raise RuntimeError("Load balancer not healthy before starting traffic generation")
+            
             from rl_training_load_test import RLTrainingLoadTester
             
             # Get available algorithms from benchmark controller
@@ -156,6 +176,9 @@ class AutomatedBenchmark:
             for algorithm in algorithms:
                 logger.info(f"🔄 Starting diversified load test for algorithm: {algorithm}")
                 
+                # Guard: wait for LB in case previous phase caused restart
+                self._wait_for_lb_ready()
+                
                 # Switch to specific algorithm and verify
                 if not self._switch_to_algorithm(algorithm):
                     logger.error(f"❌ Failed to switch to {algorithm}, skipping this algorithm")
@@ -164,6 +187,9 @@ class AutomatedBenchmark:
                 
                 # Additional wait after verified switch
                 time.sleep(5)  # Allow algorithm to fully initialize
+                
+                # Guard again before calling controller endpoints
+                self._wait_for_lb_ready()
                 
                 try:
                     # Enable benchmark mode in controller for this algorithm
@@ -191,6 +217,9 @@ class AutomatedBenchmark:
                     load_test_results = load_tester.run_diverse_load_patterns()
                     
                     # Get algorithm performance metrics from BenchmarkController
+                    # Guard before metrics call
+                    self._wait_for_lb_ready()
+                    
                     algorithm_metrics = self._get_algorithm_metrics(algorithm)
                     
                     # Combine both metrics
@@ -200,7 +229,7 @@ class AutomatedBenchmark:
                     all_results[algorithm] = algorithm_results
                     
                     logger.info(f"✅ Completed load test for {algorithm}: {algorithm_results['load_test_metrics']['total_requests']} requests, {algorithm_results['algorithm_metrics']['requestCount']} algorithm requests")
-                    
+                
                 except Exception as algo_error:
                     logger.error(f"Failed to run load test for {algorithm}: {algo_error}")
                     all_results[algorithm] = {
@@ -241,10 +270,10 @@ class AutomatedBenchmark:
             response = requests.get(f"{self.config.load_balancer_url}/api/benchmark/status")
             if response.status_code == 200:
                 data = response.json()
-                return data.get('testAlgorithms', ['rl-agent', 'round-robin'])
+                return data.get('testAlgorithms', ['rl-agent', 'round-robin', 'least-connections'])
         except:
             pass
-        return ['rl-agent', 'round-robin']
+        return ['rl-agent', 'round-robin', 'least-connections']
     
     def _switch_to_algorithm(self, algorithm):
         """Switch load balancer to specific algorithm and verify switch"""
@@ -294,14 +323,14 @@ class AutomatedBenchmark:
                 },
                 "training_scenarios": {
                     "diverse_load_patterns": {
-                        "test_duration_minutes": max(30, self.config.test_duration_minutes),  # Minimum 30 minutes per algorithm
+                        "test_duration_minutes": self.config.test_duration_minutes // 3,  # Split total duration across 3 algorithms
                         "total_users": self.config.concurrent_users * 2,
                         "max_concurrent_users": self.config.concurrent_users,
                         "traffic_patterns": [
                             {
                                 "name": "quick_test",
                                 "start_minute": 0,
-                                "duration_minutes": max(30, self.config.test_duration_minutes),  # Configurable with 30-minute minimum
+                                "duration_minutes": self.config.test_duration_minutes // 3,  # Split duration across 3 algorithms
                                 "intensity": "moderate",
                                 "concurrent_users": self.config.concurrent_users,
                                 "scenario_weights": {
@@ -488,24 +517,27 @@ class AutomatedBenchmark:
     
     def _get_algorithm_metrics(self, algorithm: str) -> Dict[str, Any]:
         """Get algorithm performance metrics from BenchmarkController"""
-        try:
-            response = requests.get(f"{self.benchmark_api}/status", timeout=10)
-            if response.status_code == 200:
-                status = response.json()
-                current_stats = status.get('currentAlgorithmStats', {})
-                return {
-                    'algorithm': algorithm,
-                    'requestCount': current_stats.get('requestCount', 0),
-                    'averageResponseTime': current_stats.get('averageResponseTime', 0.0),
-                    'errorRate': current_stats.get('errorRate', 0.0),
-                    'errorCount': current_stats.get('errorCount', 0)
-                }
-            else:
-                logger.warning(f"Failed to get algorithm metrics: {response.status_code}")
-                return self._get_empty_algorithm_metrics(algorithm)
-        except Exception as e:
-            logger.error(f"Error getting algorithm metrics: {e}")
-            return self._get_empty_algorithm_metrics(algorithm)
+        # Small retry loop to tolerate brief outages
+        attempts = 6
+        for i in range(attempts):
+            try:
+                response = requests.get(f"{self.benchmark_api}/status", timeout=10)
+                if response.status_code == 200:
+                    status = response.json()
+                    current_stats = status.get('currentAlgorithmStats', {})
+                    return {
+                        'algorithm': algorithm,
+                        'requestCount': current_stats.get('requestCount', 0),
+                        'averageResponseTime': current_stats.get('averageResponseTime', 0.0),
+                        'errorRate': current_stats.get('errorRate', 0.0),
+                        'errorCount': current_stats.get('errorCount', 0)
+                    }
+                logger.warning(f"Failed to get algorithm metrics (status {response.status_code}), attempt {i+1}/{attempts}")
+            except Exception as e:
+                logger.warning(f"Metrics fetch failed attempt {i+1}/{attempts}: {e}")
+            time.sleep(3)
+        # if all attempts fail, return empty
+        return self._get_empty_algorithm_metrics(algorithm)
     
     def _get_empty_algorithm_metrics(self, algorithm: str) -> Dict[str, Any]:
         """Return empty algorithm metrics structure for failed tests"""
@@ -785,9 +817,9 @@ def main():
     args = parser.parse_args()
     
     # Enforce minimum 30-minute duration
-    duration = max(30, args.duration)
-    if args.duration < 30:
-        logger.warning(f"Duration {args.duration} minutes is below minimum. Using 30 minutes.")
+    duration = max(5, args.duration)
+    if args.duration < 5:
+        logger.warning(f"Duration {args.duration} minutes is below minimum. Using 5 minutes.")
     
     config = BenchmarkConfig(
         load_balancer_url=args.url,

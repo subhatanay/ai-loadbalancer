@@ -19,7 +19,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 18,
+  "id": 22,
   "links": [],
   "panels": [
     {
@@ -820,7 +820,7 @@
               "options": {
                 "mode": "exclude",
                 "names": [
-                  "notification-service"
+                  "inventory-service"
                 ],
                 "prefix": "All except:",
                 "readOnly": true
@@ -965,8 +965,10 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
+          "editorMode": "code",
           "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri!~\"/actuator.*\"}[5m])) by (le, service_name)) * 1000",
           "legendFormat": "{{service_name}} - 95th percentile",
+          "range": true,
           "refId": "A"
         },
         {
@@ -1034,6 +1036,7 @@
         "displayMode": "basic",
         "maxVizHeight": 300,
         "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
@@ -1043,7 +1046,8 @@
           "values": false
         },
         "showThresholdLabels": false,
-        "showThresholdMarkers": true
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "pluginVersion": "12.1.1",
       "targets": [
@@ -1072,15 +1076,20 @@
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "vis": false,
-              "viz": false
-            }
-          },
           "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
           "unit": "reqps"
         },
         "overrides": []
@@ -1096,6 +1105,7 @@
         "displayMode": "basic",
         "maxVizHeight": 300,
         "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
@@ -1105,7 +1115,8 @@
           "values": false
         },
         "showThresholdLabels": false,
-        "showThresholdMarkers": true
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "pluginVersion": "12.1.1",
       "targets": [
@@ -1132,15 +1143,21 @@
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "vis": false,
-              "viz": false
-            }
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
           },
-          "mappings": []
+          "unit": "reqps"
         },
         "overrides": []
       },
@@ -1155,6 +1172,7 @@
         "displayMode": "basic",
         "maxVizHeight": 300,
         "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
@@ -1164,7 +1182,8 @@
           "values": false
         },
         "showThresholdLabels": false,
-        "showThresholdMarkers": true
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "pluginVersion": "12.1.1",
       "targets": [
@@ -1191,15 +1210,21 @@
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "vis": false,
-              "viz": false
-            }
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
           },
-          "mappings": []
+          "unit": "reqps"
         },
         "overrides": []
       },
@@ -1214,6 +1239,7 @@
         "displayMode": "basic",
         "maxVizHeight": 300,
         "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
@@ -1223,7 +1249,8 @@
           "values": false
         },
         "showThresholdLabels": false,
-        "showThresholdMarkers": true
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "pluginVersion": "12.1.1",
       "targets": [
@@ -1232,12 +1259,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(http_server_requests_seconds_count{service_name=\"user-service\",uri!~\"/actuator.*\"}[5m])) by (pod_name)",
+          "editorMode": "code",
+          "expr": "sum(rate(http_server_requests_seconds_count{service_name=\"order-service\",uri!~\"/actuator.*\"}[5m])) by (pod_name)",
           "legendFormat": "{{pod_name}}",
+          "range": true,
           "refId": "A"
         }
       ],
-      "title": "User Service → Pods",
+      "title": "Order Service → Pods",
       "type": "gauge"
     },
     {
@@ -1250,15 +1279,21 @@
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "vis": false,
-              "viz": false
-            }
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
           },
-          "mappings": []
+          "unit": "reqps"
         },
         "overrides": []
       },
@@ -1273,6 +1308,7 @@
         "displayMode": "basic",
         "maxVizHeight": 300,
         "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
@@ -1282,7 +1318,8 @@
           "values": false
         },
         "showThresholdLabels": false,
-        "showThresholdMarkers": true
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "pluginVersion": "12.1.1",
       "targets": [
@@ -1291,12 +1328,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(http_server_requests_seconds_count{service_name=\"inventory-service\",uri!~\"/actuator.*\"}[5m])) by (pod_name)",
+          "editorMode": "code",
+          "expr": "sum(rate(http_server_requests_seconds_count{service_name=\"payment-service\",uri!~\"/actuator.*\"}[5m])) by (pod_name)",
           "legendFormat": "{{pod_name}}",
+          "range": true,
           "refId": "A"
         }
       ],
-      "title": "Inventory Service → Pods",
+      "title": "Payment Service → Pods",
       "type": "gauge"
     },
     {
@@ -1309,15 +1348,21 @@
           "color": {
             "mode": "palette-classic"
           },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "vis": false,
-              "viz": false
-            }
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
           },
-          "mappings": []
+          "unit": "reqps"
         },
         "overrides": []
       },
@@ -1332,6 +1377,7 @@
         "displayMode": "basic",
         "maxVizHeight": 300,
         "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
@@ -1341,7 +1387,8 @@
           "values": false
         },
         "showThresholdLabels": false,
-        "showThresholdMarkers": true
+        "showThresholdMarkers": true,
+        "sizing": "auto"
       },
       "pluginVersion": "12.1.1",
       "targets": [
@@ -1350,12 +1397,14 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(http_server_requests_seconds_count{service_name=\"cart-service\",uri!~\"/actuator.*\"}[5m])) by (pod_name)",
+          "editorMode": "code",
+          "expr": "sum(rate(http_server_requests_seconds_count{service_name=\"notification-service\",uri!~\"/actuator.*\"}[5m])) by (pod_name)",
           "legendFormat": "{{pod_name}}",
+          "range": true,
           "refId": "A"
         }
       ],
-      "title": "Payment Service → Pods",
+      "title": "Notification Service → Pods",
       "type": "gauge"
     },
     {
@@ -2067,8 +2116,10 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(rate(http_server_requests_seconds_sum{service_name=\"user-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"user-service\",uri!~\"/actuator.*\"}[5m]) * 1000) and on(pod_name) up{job=\"kubernetes-pods\"}",
+          "editorMode": "code",
+          "expr": "(rate(http_server_requests_seconds_sum{service_name=\"user-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"user-service\",uri!~\"/actuator.*\"}[5m]) * 1000) ",
           "legendFormat": "{{pod_name}}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -2135,7 +2186,32 @@
           },
           "unit": "ms"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "inventory-service-69f7cb5b75-6q4fv"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": true
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
@@ -2164,8 +2240,10 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(rate(http_server_requests_seconds_sum{service_name=\"inventory-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"inventory-service\",uri!~\"/actuator.*\"}[5m]) * 1000) and on(pod_name) up{job=\"kubernetes-pods\"}",
+          "editorMode": "code",
+          "expr": "(rate(http_server_requests_seconds_sum{service_name=\"inventory-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"inventory-service\",uri!~\"/actuator.*\"}[5m]) * 1000)",
           "legendFormat": "{{pod_name}}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -2261,8 +2339,10 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(rate(http_server_requests_seconds_sum{service_name=\"cart-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"cart-service\",uri!~\"/actuator.*\"}[5m]) * 1000) and on(pod_name) up{job=\"kubernetes-pods\"}",
+          "editorMode": "code",
+          "expr": "(rate(http_server_requests_seconds_sum{service_name=\"cart-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"cart-service\",uri!~\"/actuator.*\"}[5m]) * 1000)",
           "legendFormat": "{{pod_name}}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -2358,8 +2438,10 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(rate(http_server_requests_seconds_sum{service_name=\"order-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"order-service\",uri!~\"/actuator.*\"}[5m]) * 1000) and on(pod_name) up{job=\"kubernetes-pods\"}",
+          "editorMode": "code",
+          "expr": "(rate(http_server_requests_seconds_sum{service_name=\"order-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"order-service\",uri!~\"/actuator.*\"}[5m]) * 1000)",
           "legendFormat": "{{pod_name}}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -2455,8 +2537,10 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(rate(http_server_requests_seconds_sum{service_name=\"notification-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"notification-service\",uri!~\"/actuator.*\"}[5m]) * 1000) and on(pod_name) up{job=\"kubernetes-pods\"}",
+          "editorMode": "code",
+          "expr": "(rate(http_server_requests_seconds_sum{service_name=\"notification-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"notification-service\",uri!~\"/actuator.*\"}[5m]) * 1000) ",
           "legendFormat": "{{pod_name}}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -2552,8 +2636,10 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(rate(http_server_requests_seconds_sum{service_name=\"payment-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"payment-service\",uri!~\"/actuator.*\"}[5m]) * 1000) and on(pod_name) up{job=\"kubernetes-pods\"}",
+          "editorMode": "code",
+          "expr": "(rate(http_server_requests_seconds_sum{service_name=\"payment-service\",uri!~\"/actuator.*\"}[5m]) / rate(http_server_requests_seconds_count{service_name=\"payment-service\",uri!~\"/actuator.*\"}[5m]) * 1000) ",
           "legendFormat": "{{pod_name}}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -3001,12 +3087,12 @@
     "list": []
   },
   "time": {
-    "from": "now-30m",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "AI Load Balancer - Comprehensive Dashboard (Fixed)",
   "uid": "ai-loadbalancer-dashboard-fixed",
-  "version": 13
+  "version": 19
 }

@@ -64,29 +64,41 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: status.podIP
+        # JVM tuning to reduce GC pause impact under load
+        - name: JAVA_TOOL_OPTIONS
+          value: "-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitialRAMPercentage=50 -XX:MaxRAMPercentage=70"
         livenessProbe:
           httpGet:
             path: /actuator/health
             port: 8080
-          initialDelaySeconds: 60
+          initialDelaySeconds: 90
           periodSeconds: 30
-          timeoutSeconds: 10
-          failureThreshold: 3
+          timeoutSeconds: 15
+          failureThreshold: 5
         readinessProbe:
           httpGet:
             path: /actuator/health
             port: 8080
+          initialDelaySeconds: 45
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 5
+        startupProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          # allow extra time during heavy warmup to avoid premature restarts
           initialDelaySeconds: 30
           periodSeconds: 10
+          failureThreshold: 18  # ~3 minutes max
           timeoutSeconds: 5
-          failureThreshold: 3
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
             memory: "512Mi"
             cpu: "500m"
+          limits:
+            memory: "1.5Gi"
+            cpu: "1500m"
       - name: rl-agent
         image: subhajgh/ai-loadbalancer-rl-agent:latest
         imagePullPolicy: Never
@@ -107,25 +119,33 @@ spec:
           httpGet:
             path: /health
             port: 8088
-          initialDelaySeconds: 30
+          initialDelaySeconds: 45
           periodSeconds: 30
-          timeoutSeconds: 5
-          failureThreshold: 3
+          timeoutSeconds: 10
+          failureThreshold: 5
         readinessProbe:
+          httpGet:
+            path: /health
+            port: 8088
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 5
+        startupProbe:
           httpGet:
             path: /health
             port: 8088
           initialDelaySeconds: 15
           periodSeconds: 10
+          failureThreshold: 18
           timeoutSeconds: 3
-          failureThreshold: 3
         resources:
           requests:
             memory: "256Mi"
-            cpu: "100m"
+            cpu: "300m"
           limits:
             memory: "512Mi"
-            cpu: "200m"
+            cpu: "500m"
 ---
 apiVersion: v1
 kind: Service

@@ -63,10 +63,13 @@ public class RLApiLoadBalancer implements Loadbalancer {
         
         try {
             // Get RL decision with timeout
+            long rlApiCallStart = System.currentTimeMillis();
             RLDecisionClient.RoutingDecision decision = rlDecisionClient
                     .getRoutingDecision(serviceName, null)
                     .timeout(Duration.ofMillis(2000))
                     .block();
+            long rlApiCallEnd = System.currentTimeMillis();
+            logger.debug("RL API call for service {} took: {}ms", serviceName, (rlApiCallEnd - rlApiCallStart));
             
             if (decision != null && decision.selectedPod != null) {
                 // Find the selected service instance

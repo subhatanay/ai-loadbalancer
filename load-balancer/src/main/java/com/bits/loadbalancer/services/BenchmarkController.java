@@ -3,6 +3,7 @@ package com.bits.loadbalancer.services;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.stereotype.Service;
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,7 +28,7 @@ public class BenchmarkController {
     private static final Logger logger = LoggerFactory.getLogger(BenchmarkController.class);
     
     // Available algorithms for testing
-    private final String[] testAlgorithms = {"rl-agent", "round-robin"};
+    private final String[] testAlgorithms = {"rl-agent", "round-robin", "least-connections"};
     
     // Benchmark state variables
     private volatile boolean benchmarkMode = false;
@@ -39,6 +40,9 @@ public class BenchmarkController {
     
     // Performance tracking per algorithm
     private final Map<String, AlgorithmMetrics> algorithmMetrics = new ConcurrentHashMap<>();
+    
+    @Autowired
+    private RoutingStrategyAlgorithm routingStrategyAlgorithm;
     
     /**
      * Container for algorithm-specific performance metrics
@@ -210,7 +214,9 @@ public class BenchmarkController {
         
         // Switch algorithm
         currentAlgorithm = algorithm;
-        System.setProperty("loadbalancer.routing-strategy", algorithm);
+        
+        // Directly update the routing strategy in RoutingStrategyAlgorithm
+        routingStrategyAlgorithm.setRoutingStrategy(algorithm);
         
         // Initialize metrics if not exists
         if (!algorithmMetrics.containsKey(algorithm)) {
@@ -285,7 +291,10 @@ public class BenchmarkController {
      * @param responseTimeMs Response time in milliseconds
      * @param isError Whether the request resulted in an error
      */
-    public void recordRequest(long responseTimeMs, boolean isError) {
+    public void recordRequest(long responseTimeMs, boolean isError, String requestPath) {
+        if (requestPath != null && (requestPath.contains("/actuator/") || requestPath.contains("/health"))) {
+            return;
+        }
         if (benchmarkMode && algorithmMetrics.containsKey(currentAlgorithm)) {
             AlgorithmMetrics metrics = algorithmMetrics.get(currentAlgorithm);
             metrics.recordRequest(responseTimeMs, isError);
@@ -365,13 +374,34 @@ public class BenchmarkController {
         comparison.put("bestThroughput", bestThroughput);
         comparison.put("lowestErrorRate", bestErrorRate);
         
-        // Calculate improvement percentages
+        // Calculate improvement percentages between all algorithms
+        Map<String, Object> improvements = new HashMap<>();
+        
+        // RL-Agent vs Round-Robin
         if (results.containsKey("rl-agent") && results.containsKey("round-robin")) {
             double rlResponseTime = (Double) results.get("rl-agent").get("averageResponseTime");
             double rrResponseTime = (Double) results.get("round-robin").get("averageResponseTime");
             double improvement = ((rrResponseTime - rlResponseTime) / rrResponseTime) * 100;
-            comparison.put("rlVsRoundRobinImprovement", String.format("%.1f%%", improvement));
+            improvements.put("rlVsRoundRobin", String.format("%.1f%%", improvement));
         }
+        
+        // RL-Agent vs Least-Connections
+        if (results.containsKey("rl-agent") && results.containsKey("least-connections")) {
+            double rlResponseTime = (Double) results.get("rl-agent").get("averageResponseTime");
+            double lcResponseTime = (Double) results.get("least-connections").get("averageResponseTime");
+            double improvement = ((lcResponseTime - rlResponseTime) / lcResponseTime) * 100;
+            improvements.put("rlVsLeastConnections", String.format("%.1f%%", improvement));
+        }
+        
+        // Round-Robin vs Least-Connections
+        if (results.containsKey("round-robin") && results.containsKey("least-connections")) {
+            double rrResponseTime = (Double) results.get("round-robin").get("averageResponseTime");
+            double lcResponseTime = (Double) results.get("least-connections").get("averageResponseTime");
+            double improvement = ((lcResponseTime - rrResponseTime) / lcResponseTime) * 100;
+            improvements.put("roundRobinVsLeastConnections", String.format("%.1f%%", improvement));
+        }
+        
+        comparison.put("performanceImprovements", improvements);
         
         return comparison;
     }
