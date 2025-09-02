@@ -23,53 +23,44 @@ By leveraging reinforcement learning, the AI Load Balancer can learn the unique 
 
 The architecture is designed around a central AI-powered load balancer that acts as the single entry point for all client requests. It intelligently routes traffic to a suite of backend microservices, each responsible for a specific business domain. The entire system is observable through a dedicated monitoring stack.
 
-```mermaid
-graph TD
-    subgraph "Clients"
-        Client[External Clients / Users]
-    end
-
-    subgraph "Gateway & Intelligence"
-        LB[AI Load Balancer]
-        RL[RL Agent]
-    end
-
-    subgraph "E-Commerce Microservices"
-        UserService[User Service]
-        CartService[Cart Service]
-        OrderService[Order Service]
-        InventoryService[Inventory Service]
-        PaymentService[Payment Service]
-        NotificationService[Notification Service]
-    end
-
-    subgraph "Data Infrastructure"
-        Postgres[(PostgreSQL)]
-        Redis[(Redis)]
-    end
-
-    subgraph "Monitoring & Observability"
-        Prometheus[Prometheus]
-        Grafana[Grafana]
-    end
-
+---
+config:
+  layout: elk
+---
+flowchart TB
+ subgraph Clients["Clients"]
+        Client["External Clients / Users"]
+  end
+ subgraph subGraph1["Gateway & Intelligence"]
+        LB["AI Load Balancer"]
+        RL["RL Agent"]
+  end
+ subgraph subGraph2["E-Commerce Microservices"]
+        UserService["User Service"]
+        CartService["Cart Service"]
+        OrderService["Order Service"]
+        InventoryService["Inventory Service"]
+        PaymentService["Payment Service"]
+        NotificationService["Notification Service"]
+  end
+ subgraph subGraph3["Data & Messaging Infrastructure"]
+        Postgres[("PostgreSQL")]
+        Redis[("Redis")]
+        Kafka[("Apache Kafka")]
+  end
+ subgraph subGraph4["Monitoring & Observability"]
+        Prometheus["Prometheus"]
+        Grafana["Grafana"]
+  end
     Client --> LB
-
     LB <--> RL
-    LB --> UserService
-    LB --> CartService
-    LB --> OrderService
-    LB --> InventoryService
-
+    LB --> UserService & CartService & OrderService & InventoryService
     UserService --> Postgres
     CartService --> Redis
-    OrderService --> Postgres
+    OrderService --> Postgres & Kafka & PaymentService & InventoryService
     InventoryService --> Postgres
     PaymentService --> Postgres
-    OrderService --> NotificationService
-    OrderService --> PaymentService
-    OrderService --> InventoryService
-
+    NotificationService --> Kafka
     RL -- Collects Metrics --> Prometheus
     UserService -- Pushes Metrics --> Prometheus
     CartService -- Pushes Metrics --> Prometheus
@@ -78,9 +69,8 @@ graph TD
     PaymentService -- Pushes Metrics --> Prometheus
     NotificationService -- Pushes Metrics --> Prometheus
     LB -- Pushes Metrics --> Prometheus
-
     Grafana -- Visualizes --> Prometheus
-```
+
 
 ## 🛠️ Technology Stack
 
@@ -282,31 +272,48 @@ To understand how the microservices work together, let's trace a typical user jo
 sequenceDiagram
     participant Client
     participant AI Load Balancer
+    participant User Service
     participant Order Service
     participant Inventory Service
     participant Payment Service
     participant Cart Service
     participant Notification Service
 
-    Client->>+AI Load Balancer: POST /api/orders (Create Order)
+
+    Note over Client, User Service: 1. Authentication
+    Client->>+AI Load Balancer: POST /api/users/login
+    AI Load Balancer->>+User Service: Forward login request
+    User Service-->>-AI Load Balancer: Returns JWT Token
+    AI Load Balancer-->>-Client: JWT Token
+
+
+    Note over Client, Order Service: 2. Place Order with Token
+    Client->>+AI Load Balancer: POST /api/orders (Auth: JWT)
     AI Load Balancer->>+Order Service: Forward request
 
-    Order Service->>+Inventory Service: POST /api/inventory/reserve (Reserve Items)
-    Inventory Service-->>-Order Service: Reservation ID
 
-    Order Service->>+Payment Service: POST /api/payments (Process Payment)
-    Payment Service-->>-Order Service: Payment Success
+    Order Service->>+Inventory Service: POST /api/inventory/reserve
+    InventoryService-->>-Order Service: Reservation ID
 
-    Order Service->>+Inventory Service: POST /api/inventory/confirm/{reservationId} (Confirm Stock)
-    Inventory Service-->>-Order Service: Stock Confirmed
+
+    Order Service->>+Payment Service: POST /api/payments
+    PaymentService-->>-Order Service: Payment Success
+
+
+    Order Service->>+Inventory Service: POST /api/inventory/confirm/{reservationId}
+    InventoryService-->>-Order Service: Stock Confirmed
+
 
     Order Service->>+Cart Service: POST /api/cart/{userId}/convert-to-order (Clear Cart)
     Cart Service-->>-Order Service: Cart Cleared
 
+
     Order Service->>Order Service: Save Order to DB (Status: PAID)
+
 
     Order Service->>+Notification Service: POST /api/notifications (Send Confirmation)
     Notification Service-->>-Order Service: Notification Sent
+
 
     Order Service-->>-AI Load Balancer: 201 Created (Order Details)
     AI Load Balancer-->>-Client: 201 Created (Order Details)
