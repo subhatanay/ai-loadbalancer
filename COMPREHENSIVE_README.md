@@ -269,7 +269,7 @@ This section provides a detailed look at each microservice, its responsibilities
 To understand how the microservices work together, let's trace a typical user journey: placing an order. This flow demonstrates the orchestration required to complete a transaction.
 
 ```mermaid
-ssequenceDiagram
+sequenceDiagram
     participant Client
     participant AI_Load_Balancer as AI_Load_Balancer
     participant User_Service as User_Service
