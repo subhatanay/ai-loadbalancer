@@ -22,7 +22,7 @@ By leveraging reinforcement learning, the AI Load Balancer can learn the unique 
 ## 🏗️ High-Level Architecture
 
 The architecture is designed around a central AI-powered load balancer that acts as the single entry point for all client requests. It intelligently routes traffic to a suite of backend microservices, each responsible for a specific business domain. The entire system is observable through a dedicated monitoring stack.
-
+```mermaid
 ---
 config:
   layout: elk
@@ -70,7 +70,7 @@ flowchart TB
     NotificationService -- Pushes Metrics --> Prometheus
     LB -- Pushes Metrics --> Prometheus
     Grafana -- Visualizes --> Prometheus
-
+```
 
 ## 🛠️ Technology Stack
 
@@ -269,54 +269,46 @@ This section provides a detailed look at each microservice, its responsibilities
 To understand how the microservices work together, let's trace a typical user journey: placing an order. This flow demonstrates the orchestration required to complete a transaction.
 
 ```mermaid
-sequenceDiagram
+ssequenceDiagram
     participant Client
-    participant AI Load Balancer
-    participant User Service
-    participant Order Service
-    participant Inventory Service
-    participant Payment Service
-    participant Cart Service
-    participant Notification Service
+    participant AI_Load_Balancer as AI_Load_Balancer
+    participant User_Service as User_Service
+    participant Order_Service as Order_Service
+    participant Inventory_Service as Inventory_Service
+    participant Payment_Service as Payment_Service
+    participant Cart_Service as Cart_Service
+    participant Notification_Service as Notification_Service
 
+    Note over Client, User_Service: 1. Authentication
+    Client->>+AI_Load_Balancer: POST /api/users/login
+    AI_Load_Balancer->>+User_Service: Forward login request
+    User_Service-->>-AI_Load_Balancer: Returns JWT Token
+    AI_Load_Balancer-->>-Client: JWT Token
 
-    Note over Client, User Service: 1. Authentication
-    Client->>+AI Load Balancer: POST /api/users/login
-    AI Load Balancer->>+User Service: Forward login request
-    User Service-->>-AI Load Balancer: Returns JWT Token
-    AI Load Balancer-->>-Client: JWT Token
+    Note over Client, Order_Service: 2. Place Order with Token
+    Client->>+AI_Load_Balancer: POST /api/orders (Auth: JWT)
+    AI_Load_Balancer->>+Order_Service: Forward request
 
+    Order_Service->>+Inventory_Service: POST /api/inventory/reserve
+    Inventory_Service-->>-Order_Service: Reservation ID
 
-    Note over Client, Order Service: 2. Place Order with Token
-    Client->>+AI Load Balancer: POST /api/orders (Auth: JWT)
-    AI Load Balancer->>+Order Service: Forward request
+    Order_Service->>+Payment_Service: POST /api/payments
+    Payment_Service-->>-Order_Service: Payment Success
 
+    Order_Service->>+Inventory_Service: POST /api/inventory/confirm/{reservationId}
+    Inventory_Service-->>-Order_Service: Stock Confirmed
 
-    Order Service->>+Inventory Service: POST /api/inventory/reserve
-    InventoryService-->>-Order Service: Reservation ID
+    Order_Service->>+Cart_Service: POST /api/cart/{userId}/convert-to-order (Clear Cart)
+    Cart_Service-->>-Order_Service: Cart Cleared
 
+    Order_Service->>Order_Service: Save Order to DB (Status: PAID)
 
-    Order Service->>+Payment Service: POST /api/payments
-    PaymentService-->>-Order Service: Payment Success
+    Order_Service->>+Notification_Service: POST /api/notifications (Send Confirmation)
+    Notification_Service-->>-Order_Service: Notification Sent
 
+    Order_Service-->>-AI_Load_Balancer: 201 Created (Order Details)
+    AI_Load_Balancer-->>-Client: 201 Created (Order Details)
 
-    Order Service->>+Inventory Service: POST /api/inventory/confirm/{reservationId}
-    InventoryService-->>-Order Service: Stock Confirmed
-
-
-    Order Service->>+Cart Service: POST /api/cart/{userId}/convert-to-order (Clear Cart)
-    Cart Service-->>-Order Service: Cart Cleared
-
-
-    Order Service->>Order Service: Save Order to DB (Status: PAID)
-
-
-    Order Service->>+Notification Service: POST /api/notifications (Send Confirmation)
-    Notification Service-->>-Order Service: Notification Sent
-
-
-    Order Service-->>-AI Load Balancer: 201 Created (Order Details)
-    AI Load Balancer-->>-Client: 201 Created (Order Details)
 ```
 
 ## 🚀 Running the Project
