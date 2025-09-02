@@ -42,7 +42,7 @@ kubectl apply -f config-yaml/cluster-role.yaml
 kubectl apply -f config-yaml/prometheus-rbac.yaml
 kubectl apply -f config-yaml/prometheus.yaml
 kubectl apply -f config-yaml/grafana.yaml
-kubectl apply -f config-yaml/grafana-dashboards.yaml
+kubectl apply -f config-yaml/grafana-dashboards-provisioning.yaml
 # Conditionally apply RL-collector deployment
 if [ "$ENABLE_RL_COLLECTOR" = true ]; then
   echo "Deploying RL-collector..."
@@ -51,6 +51,16 @@ else
   echo "RL-collector deployment DISABLED (toggle: ENABLE_RL_COLLECTOR=false)"
 fi
 kubectl apply -f config-yaml/ai-loadbalancer.yaml
+
+# Apply logging stack
+echo "Applying centralized logging stack (Fluent Bit & OpenSearch)..."
+kubectl apply -f logging/namespace.yaml
+kubectl apply -f logging/opensearch.yaml
+kubectl apply -f logging/opensearch-dashboards.yaml
+kubectl apply -f logging/fluent-bit-rbac.yaml
+kubectl apply -f logging/fluent-bit-config.yaml
+kubectl apply -f logging/fluent-bit-daemonset.yaml
+
 
 # Wait for deployments to be ready
 echo "Waiting for deployments to be ready..."
@@ -73,6 +83,12 @@ kubectl wait --for=condition=available --timeout=300s deployment/notification-se
 kubectl wait --for=condition=available --timeout=300s deployment/prometheus -n ai-loadbalancer
 kubectl wait --for=condition=available --timeout=300s deployment/grafana -n ai-loadbalancer
 kubectl wait --for=condition=available --timeout=300s deployment/ai-loadbalancer -n ai-loadbalancer
+
+# Wait for logging stack
+echo "Waiting for logging stack to be ready..."
+kubectl wait --for=condition=available --timeout=300s deployment/opensearch -n logging
+kubectl wait --for=condition=available --timeout=300s deployment/opensearch-dashboards -n logging
+kubectl wait --for=condition=ready pod -l app=fluent-bit -n logging --timeout=300s
 
 echo "Deployment complete!"
 
