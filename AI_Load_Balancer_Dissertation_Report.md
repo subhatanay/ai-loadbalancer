@@ -879,28 +879,63 @@ def select_action(self, current_metrics, available_instances):
 
 ### 5.5 RL-Agent API
 
-The RL-Agent exposes a REST API for the load balancer to query routing decisions.
+The RL-Agent exposes a REST API for the load balancer to query routing decisions. The two primary endpoints, `/decide` and `/feedback`, form the core of the interaction between the load balancer and the learning agent.
 
 ```python
-# In rl_agent/api.py
+# In rl_decision_api.py
 
-## 7. Conclusions and Recommendations
+@app.post("/decide")
+async def decide_routing(request: RoutingRequest) -> RoutingResponse:
+    """
+    Main endpoint for routing decisions. It performs service discovery,
+    collects real-time metrics, and uses the RL-agent to select the optimal pod.
+    """
+    # 1. Discover available service instances
+    available_pods = lb_client.get_registered_services(request.service_name)
+
+    # 2. Collect real-time metrics for all available pods from Prometheus
+    current_metrics = prometheus_client.get_service_metrics(available_pods)
+
+    # 3. Use the RL-Agent to select the best action (pod)
+    # This involves state encoding and applying the epsilon-greedy policy
+    selected_pod = rl_agent.select_action(
+        current_metrics, available_pods
+    )
+
+    # 4. Store the context of this decision for the subsequent feedback call
+    decision_context_cache[trace_id] = (rl_agent.current_state, selected_pod)
+
+    return RoutingResponse(
+        selected_pod=selected_pod,
+        # ... other response fields ...
+    )
+
+
+@app.post("/feedback")
+async def receive_feedback(feedback: FeedbackRequest):
+    """
+    Receives the outcome of a completed request and uses it to train the agent.
+    """
+    # 1. Retrieve the original decision context (state, action) using the trace_id
+    old_state, action = decision_context_cache.get(feedback.trace_id)
+
+    # 2. Get the new state of the system after the action was taken
+    new_metrics = prometheus_client.get_service_metrics(feedback.service_name)
+    next_state = rl_agent.state_encoder.encode_state(new_metrics)
+
+    # 3. Calculate the reward based on the outcome (latency, status code)
+    reward = rl_agent.reward_calculator.calculate_reward(
+        feedback.response_time_ms, feedback.status_code
+    )
+
+    # 4. Update the agent's Q-table using the Bellman equation
+    rl_agent.update_q_table(old_state, action, reward, next_state)
+
+    return {"status": "feedback processed"}
+
+```
 
 This final chapter summarizes the key conclusions drawn from the project and provides recommendations for future work, outlining potential avenues for extending and enhancing the capabilities of the AI-Powered Load Balancer.
-
-### 7.1 Conclusions
-
-This project successfully designed, implemented, and validated an adaptive load balancing system that leverages reinforcement learning to optimize traffic distribution in a complex microservices environment. The research and development process has led to several key conclusions:
-
-1.  **Reinforcement Learning is a Viable and Effective Solution for Dynamic Load Balancing**: The empirical results demonstrate that the RL-Agent, despite a modest increase in per-request latency, can achieve significantly higher system throughput and reliability compared to traditional algorithms. This confirms that an agent-based learning approach can capture the complex dynamics of a microservices environment and make more effective, holistic decisions.
-
-2.  **Multi-Objective Optimization is Crucial**: The success of the RL-Agent was heavily dependent on a well-designed, multi-objective reward function. Early iterations that over-weighted a single metric (e.g., error rate) led to poor learning. The final, normalized reward function that balances latency, errors, throughput, and stability was critical for achieving a robust and balanced performance profile.
-
-3.  **The Trade-off Between Intelligence and Latency is Real but Manageable**: The project confirmed that introducing an intelligent decision-making layer adds computational overhead. However, it also demonstrated that this latency can be effectively managed. By co-locating the RL-Agent with the load balancer as a sidecar, network latency was eliminated, and while a computational delay remains, its negative impact is more than offset by the system-wide gains in throughput and error reduction.
-
-4.  **Offline Training is a Safe and Effective Strategy**: The offline training methodology proved to be a robust approach for bootstrapping the agent's knowledge base. It allowed for safe, rapid iteration on the model and its hyperparameters without any risk to a live system, providing a stable foundation of knowledge before the agent was deployed.
-
-In summary, this dissertation provides strong evidence that AI-powered, adaptive load balancing is not just a theoretical concept but a practical and superior alternative to the static, heuristic-based methods that are prevalent today.
 
 ## 6. Observed Performance Metrics
 
