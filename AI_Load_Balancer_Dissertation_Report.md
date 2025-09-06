@@ -500,17 +500,19 @@ A robust monitoring stack is critical for providing the real-time data needed fo
 
 ### 4.5 Deployment Architecture
 
-The entire ecosystem is designed to be deployed in a containerized environment orchestrated by Kubernetes. Before diving into the specifics, it's helpful to understand two fundamental concepts in Kubernetes:
-*   **Pods**: The smallest deployable units in Kubernetes. A pod represents a single instance of a running process in your cluster and can contain one or more containers. In our architecture, each microservice replica runs in its own pod.
-*   **Services**: An abstract way to expose an application running on a set of Pods as a network service. Kubernetes gives pods their own IP addresses, but they are ephemeral. A Service provides a stable, single DNS name and IP address that automatically load-balances traffic to the correct group of pods, even as they are created or destroyed.
+The entire ecosystem is designed for a container-native deployment using Kubernetes, which orchestrates the complex interactions between the various microservices and the AI-powered components.
 
-This architecture leverages these concepts to create a scalable and resilient system.
+*   **Containerization**: Each microservice in the project—such as the `user-service`, `cart-service`, and `order-service`—is individually packaged as a lightweight, standalone Docker image. This encapsulates its dependencies and ensures consistent behavior across different environments.
 
-*   **Containerization**: Each microservice is packaged as a Docker image.
-*   **Cluster Setup (Kind)**: For local development and testing, the Kubernetes cluster was provisioned using **Kind (Kubernetes in Docker)**. Kind runs a complete, multi-node Kubernetes cluster within Docker containers on a single machine. This provided a lightweight, fast, and consistent way to spin up and tear down a realistic cluster environment without the overhead of a full cloud-based setup.
-*   **Orchestration**: Kubernetes is used to manage the deployment, scaling, networking, and health of all containers.
-*   **Service Discovery (Redis-Based)**: While Kubernetes provides its own DNS for service-to-service communication, our AI Load Balancer requires a more dynamic, real-time registry of available service *instances* (pods). To achieve this, we implemented a custom service discovery mechanism using Redis. Each microservice instance, upon starting up, **pushes** its identity and network address to a known key in Redis with a short time-to-live (TTL). The AI Load Balancer continuously **pulls** this list of active instances from Redis, giving it a real-time, highly available view of all healthy pods it can route traffic to.
-*   **AI-Agent Co-location**: A key design decision is the deployment of the RL-Agent. Instead of running as a separate, standalone service that would introduce network latency into every decision, the RL-Agent container is deployed within the *same pod* as the AI Load Balancer. This **sidecar pattern** ensures that communication between the load balancer and the agent occurs over the local pod network (`localhost`), minimizing decision latency to sub-millisecond levels.
+*   **Pods**: Kubernetes deploys these container images into **Pods**, the smallest deployable units in the cluster. For scalability and resilience, services like the `cart-service` are run with multiple replicas, meaning Kubernetes creates multiple pods, each running an identical `cart-service` container. The most unique pod is the one for the `ai-loadbalancer`, which is specifically configured to run two containers together: the Java-based load balancer application and the Python-based `rl-agent`. This is a critical design choice known as the **sidecar pattern**.
+
+*   **AI-Agent Co-location (Sidecar Pattern)**: By placing the `rl-agent` container in the same pod as the `ai-loadbalancer`, they share a network namespace and can communicate via `localhost`. This eliminates network latency from the decision-making loop, as the load balancer does not need to make a network call to an external service to get a routing decision. This co-location is essential for keeping the decision-making process fast.
+
+*   **Services**: While pods have their own IP addresses, these can change. To provide a stable endpoint for communication, a Kubernetes **Service** is created for each microservice type. For example, the `cart-service` Kubernetes Service provides a single, stable DNS name (e.g., `cart-service`) that the AI Load Balancer uses to send traffic. The Service then automatically load-balances incoming requests across all the healthy `cart-service` pods.
+
+*   **Service Discovery (Redis-Based)**: The standard Kubernetes Service provides load balancing, but it abstracts away the individual pods. For the RL-Agent to make its fine-grained decisions, it needs a real-time list of every single available pod. To achieve this, a custom service discovery layer was built on top of Kubernetes using Redis. Upon startup, each microservice pod registers its unique address with a Redis server. The AI Load Balancer continuously queries this Redis list to get a live, accurate inventory of all healthy pods it can choose from for routing.
+
+*   **Cluster Setup (Kind)**: For local development and testing, the Kubernetes cluster was provisioned using **Kind (Kubernetes in Docker)**. Kind runs a complete Kubernetes cluster within Docker containers on a single machine, providing a lightweight and consistent way to replicate the production deployment environment locally.
 
 The following diagram provides a detailed view of the Kubernetes deployment, showing the pods, replica counts, and the co-located AI-Agent sidecar.
 
