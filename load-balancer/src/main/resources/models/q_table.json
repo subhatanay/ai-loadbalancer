@@ -1,0 +1,73 @@
+{
+  "(np.float64(4.0), np.float64(3.0), np.float64(0.0), np.float64(3.0), np.float64(0.0), 3, 0)": {
+    "user-service-86d6974647-5d4bn": 19.99999999999988,
+    "user-service-86d6974647-szbjb": 19.99999999999988,
+    "inventory-service-69f7cb5b75-t7spq": 19.99999999999988,
+    "inventory-service-69f7cb5b75-9x5gw": 19.99999999999988,
+    "cart-service-56c7cf46c4-c9ng6": 19.99999999999988,
+    "cart-service-56c7cf46c4-m6g55": 19.99999999999988,
+    "notification-service-84d96d9d6c-vsjq9": 19.99999999999988,
+    "notification-service-84d96d9d6c-fspwf": 19.99999999999988,
+    "order-service-7db58c5884-dntcf": 19.99999999999988,
+    "order-service-7db58c5884-p8t6b": 19.99999999999988,
+    "payment-service-7d7bd59ddb-cb4sh": 19.99999999999988,
+    "payment-service-7d7bd59ddb-pqnwm": 19.99999999999988
+  },
+  "(np.float64(4.0), np.float64(3.0), np.float64(0.0), np.float64(3.0), np.float64(0.0), 3, 1)": {
+    "inventory-service-69f7cb5b75-9x5gw": 19.99999999999988,
+    "inventory-service-69f7cb5b75-t7spq": 19.99999999999988,
+    "cart-service-56c7cf46c4-c9ng6": 19.997906044597865,
+    "payment-service-7d7bd59ddb-pqnwm": 19.99999999999988,
+    "notification-service-84d96d9d6c-vsjq9": 19.99999999999988,
+    "payment-service-7d7bd59ddb-cb4sh": 19.99999999999988,
+    "notification-service-84d96d9d6c-fspwf": 19.99999999999988,
+    "cart-service-56c7cf46c4-m6g55": 19.99999999999988,
+    "user-service-86d6974647-5d4bn": 19.99999999999988,
+    "user-service-86d6974647-szbjb": 19.99999999999988,
+    "order-service-7db58c5884-dntcf": 19.99999999999988,
+    "order-service-7db58c5884-p8t6b": 19.99999999999988
+  },
+  "(np.float64(4.0), np.float64(1.0), np.float64(0.0), np.float64(3.0), np.float64(0.0), 3, 0)": {
+    "user-service-86d6974647-szbjb": 19.99999999999988,
+    "user-service-86d6974647-5d4bn": 19.99999999999988,
+    "inventory-service-69f7cb5b75-9x5gw": 19.99999999999988,
+    "inventory-service-69f7cb5b75-t7spq": 19.99999999999988,
+    "cart-service-56c7cf46c4-c9ng6": 19.948116790843056,
+    "cart-service-56c7cf46c4-m6g55": 19.99999999999988,
+    "notification-service-84d96d9d6c-fspwf": 19.99999999999988,
+    "order-service-7db58c5884-p8t6b": 19.99999999999988,
+    "payment-service-7d7bd59ddb-cb4sh": 19.99999999999988,
+    "notification-service-84d96d9d6c-vsjq9": 19.99999999999988,
+    "order-service-7db58c5884-dntcf": 19.99999999999988,
+    "payment-service-7d7bd59ddb-pqnwm": 19.99999999999988
+  },
+  "(np.float64(4.0), np.float64(2.0), np.float64(0.0), np.float64(3.0), np.float64(0.0), 3, 0)": {
+    "inventory-service-69f7cb5b75-t7spq": 19.99999999999988,
+    "user-service-86d6974647-5d4bn": 19.99999999999988,
+    "inventory-service-69f7cb5b75-9x5gw": 19.99999999999988,
+    "user-service-86d6974647-szbjb": 19.99999999999988,
+    "cart-service-56c7cf46c4-m6g55": 19.995727194640935,
+    "cart-service-56c7cf46c4-c9ng6": 19.999999999973525,
+    "notification-service-84d96d9d6c-fspwf": 19.99999999999988,
+    "order-service-7db58c5884-dntcf": 19.99999999999988,
+    "payment-service-7d7bd59ddb-pqnwm": 19.99999999999988,
+    "notification-service-84d96d9d6c-vsjq9": 19.99999999999988,
+    "order-service-7db58c5884-p8t6b": 19.99999999999988,
+    "payment-service-7d7bd59ddb-cb4sh": 19.99999999999988
+  },
+  "(np.float64(4.0), np.float64(0.0), np.float64(0.0), np.float64(3.0), np.float64(0.0), 3, 0)": {
+    "user-service-86d6974647-5d4bn": 19.99999999999988,
+    "user-service-86d6974647-szbjb": 19.99999999999988,
+    "inventory-service-69f7cb5b75-t7spq": 19.99999999999988,
+    "inventory-service-69f7cb5b75-9x5gw": 19.99999999999988,
+    "cart-service-56c7cf46c4-m6g55": 19.99999999999988,
+    "cart-service-56c7cf46c4-c9ng6": 19.99999999999988,
+    "notification-service-84d96d9d6c-fspwf": 19.99999999999988,
+    "order-service-7db58c5884-p8t6b": 19.99999999999988,
+    "payment-service-7d7bd59ddb-cb4sh": 19.99999999999988,
+    "notification-service-84d96d9d6c-vsjq9": 19.99999999999988
+  },
+  "(np.float64(4.0), np.float64(3.0), np.float64(0.0), np.float64(3.0), np.float64(0.0), 3, 2)": {
+    "inventory-service-69f7cb5b75-9x5gw": 19.99999999999988
+  }
+}

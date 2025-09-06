@@ -799,6 +799,221 @@ class AutomatedBenchmark:
         
         print("="*80)
     
+    def run_single_algorithm_test(self, algorithm: str) -> bool:
+        """Run benchmark test for a single algorithm only"""
+        logger.info(f"🎯 Starting single algorithm test for: {algorithm}")
+        
+        try:
+            # Step 1: Validate system readiness
+            if not self._validate_system():
+                return False
+            
+            # Step 2: Validate algorithm name
+            valid_algorithms = ['rl-agent', 'round-robin', 'least-connections']
+            if algorithm not in valid_algorithms:
+                logger.error(f"Invalid algorithm: {algorithm}. Valid options: {valid_algorithms}")
+                return False
+            
+            # Step 3: Run single algorithm test
+            logger.info(f"🚀 Running {self.config.test_duration_minutes}-minute test for {algorithm}")
+            
+            # Switch to the specified algorithm
+            if not self._switch_to_algorithm(algorithm):
+                logger.error(f"❌ Failed to switch to {algorithm}")
+                return False
+            
+            # Wait for algorithm to initialize
+            time.sleep(5)
+            
+            # Guard: ensure LB is ready
+            self._wait_for_lb_ready()
+            
+            # Enable benchmark mode and reset metrics
+            self._enable_benchmark_mode()
+            self._reset_algorithm_metrics(algorithm)
+            
+            # Create test configuration
+            temp_config = self._create_single_algorithm_config()
+            
+            # Save temporary config
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                json.dump(temp_config, f, indent=2)
+                temp_config_path = f.name
+            
+            # Run the load test
+            sys.path.append('/Users/subhajgh/Documents/bits/final-project/ai-loadbalancer/load-testing')
+            from rl_training_load_test import RLTrainingLoadTester
+            
+            load_tester = RLTrainingLoadTester(config_file=temp_config_path)
+            load_test_results = load_tester.run_diverse_load_patterns()
+            
+            # Get algorithm performance metrics
+            self._wait_for_lb_ready()
+            algorithm_metrics = self._get_algorithm_metrics(algorithm)
+            
+            # Combine metrics
+            combined_results = self._combine_metrics(load_test_results, algorithm_metrics, algorithm)
+            
+            # Generate single algorithm report
+            self._generate_single_algorithm_report(combined_results)
+            
+            # Save results
+            self._save_single_algorithm_results(combined_results)
+            
+            # Cleanup temp config
+            try:
+                import os
+                os.unlink(temp_config_path)
+            except:
+                pass
+            
+            logger.info(f"✅ Single algorithm test completed for {algorithm}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Single algorithm test failed: {e}")
+            import traceback
+            logger.error(f"Error details: {traceback.format_exc()}")
+            return False
+        finally:
+            self._cleanup()
+    
+    def _create_single_algorithm_config(self):
+        """Create configuration for single algorithm testing with full duration"""
+        return {
+            "rl_training_scenarios": {
+                "base_config": {
+                    "base_url": self.config.load_balancer_url + "/proxy",
+                    "request_timeout": 10,
+                    "max_retries": 2
+                },
+                "training_scenarios": {
+                    "diverse_load_patterns": {
+                        "test_duration_minutes": self.config.test_duration_minutes,  # Full duration for single algorithm
+                        "total_users": self.config.concurrent_users * 2,
+                        "max_concurrent_users": self.config.concurrent_users,
+                        "traffic_patterns": [
+                            {
+                                "name": "single_algorithm_test",
+                                "start_minute": 0,
+                                "duration_minutes": self.config.test_duration_minutes,  # Full duration
+                                "intensity": "moderate",
+                                "concurrent_users": self.config.concurrent_users,
+                                "scenario_weights": {
+                                    "browse_weight": 40,
+                                    "search_weight": 20,
+                                    "cart_weight": 30,
+                                    "order_weight": 5,
+                                    "profile_weight": 5
+                                }
+                            }
+                        ]
+                    }
+                },
+                "enhanced_test_products": [
+                    {
+                        "sku": "LAPTOP-001",
+                        "name": "Dell XPS 13 Laptop",
+                        "category": "Electronics",
+                        "price": 1299.99,
+                        "image": "https://example.com/laptop.jpg",
+                        "popularity_score": 0.9
+                    },
+                    {
+                        "sku": "PHONE-001", 
+                        "name": "iPhone 15 Pro",
+                        "category": "Electronics",
+                        "price": 999.99,
+                        "image": "https://example.com/phone.jpg",
+                        "popularity_score": 0.95
+                    },
+                    {
+                        "sku": "TABLET-001",
+                        "name": "iPad Air 5th Gen", 
+                        "category": "Electronics",
+                        "price": 599.99,
+                        "image": "https://example.com/tablet.jpg",
+                        "popularity_score": 0.8
+                    }
+                ]
+            }
+        }
+    
+    def _generate_single_algorithm_report(self, results):
+        """Generate report for single algorithm test"""
+        logger.info("📊 Generating single algorithm test report")
+        
+        print("\n" + "="*80)
+        print(f"🎯 SINGLE ALGORITHM TEST RESULTS: {results['algorithm'].upper()}")
+        print("="*80)
+        
+        if 'load_test_metrics' in results and 'algorithm_metrics' in results:
+            load_metrics = results['load_test_metrics']
+            algo_metrics = results['algorithm_metrics']
+            
+            print(f"\n📈 LOAD TEST PERFORMANCE:")
+            print(f"   Generated Requests: {load_metrics.get('total_requests', 0):,}")
+            print(f"   Success Rate: {load_metrics.get('success_rate_percent', 0):.2f}%")
+            print(f"   Average Latency: {load_metrics.get('average_latency_seconds', 0):.3f}s")
+            print(f"   Total Sessions: {load_metrics.get('total_sessions', 0)}")
+            print(f"   Test Duration: {load_metrics.get('test_duration_minutes', 0):.1f} minutes")
+            
+            print(f"\n🔧 ALGORITHM PERFORMANCE:")
+            print(f"   Algorithm Requests: {algo_metrics.get('requestCount', 0):,}")
+            print(f"   Avg Response Time: {algo_metrics.get('averageResponseTime', 0):.2f}ms")
+            print(f"   Error Rate: {algo_metrics.get('errorRate', 0):.2f}%")
+            print(f"   Error Count: {algo_metrics.get('errorCount', 0)}")
+            
+            # Performance assessment
+            response_time = algo_metrics.get('averageResponseTime', 0)
+            error_rate = algo_metrics.get('errorRate', 0)
+            throughput = algo_metrics.get('requestCount', 0)
+            
+            print(f"\n🏆 PERFORMANCE ASSESSMENT:")
+            if response_time < 50:
+                print(f"   Response Time: ✅ EXCELLENT ({response_time:.2f}ms)")
+            elif response_time < 100:
+                print(f"   Response Time: ⚠️  GOOD ({response_time:.2f}ms)")
+            else:
+                print(f"   Response Time: ❌ NEEDS IMPROVEMENT ({response_time:.2f}ms)")
+            
+            if error_rate < 5:
+                print(f"   Reliability: ✅ EXCELLENT ({error_rate:.2f}% errors)")
+            elif error_rate < 10:
+                print(f"   Reliability: ⚠️  ACCEPTABLE ({error_rate:.2f}% errors)")
+            else:
+                print(f"   Reliability: ❌ POOR ({error_rate:.2f}% errors)")
+            
+            if throughput > 10000:
+                print(f"   Throughput: ✅ HIGH ({throughput:,} requests)")
+            elif throughput > 5000:
+                print(f"   Throughput: ⚠️  MODERATE ({throughput:,} requests)")
+            else:
+                print(f"   Throughput: ❌ LOW ({throughput:,} requests)")
+        
+        print("\n" + "="*80)
+    
+    def _save_single_algorithm_results(self, results):
+        """Save single algorithm test results to file"""
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            algorithm = results['algorithm']
+            results_file = f"single_algorithm_{algorithm}_{timestamp}.json"
+            
+            with open(results_file, 'w') as f:
+                json.dump({
+                    'config': self.config.__dict__,
+                    'algorithm': algorithm,
+                    'results': results,
+                    'timestamp': timestamp
+                }, f, indent=2)
+            
+            logger.info(f"📄 Single algorithm results saved to: {results_file}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save single algorithm results: {e}")
+    
     def _cleanup(self):
         """Cleanup benchmark resources"""
         try:
@@ -810,13 +1025,15 @@ class AutomatedBenchmark:
 def main():
     parser = argparse.ArgumentParser(description='Automated Load Balancer Benchmarking')
     parser.add_argument('--url', default='http://localhost:8080', help='Load balancer URL')
-    parser.add_argument('--duration', type=int, default=30, help='Test duration in minutes (minimum 30)')
+    parser.add_argument('--duration', type=int, default=30, help='Test duration in minutes (minimum 5)')
     parser.add_argument('--users', type=int, default=50, help='Concurrent users')
     parser.add_argument('--ramp-up', type=int, default=30, help='Ramp up time in seconds')
+    parser.add_argument('--algorithm', type=str, default=None, 
+                       help='Test single algorithm only (rl-agent, round-robin, least-connections)')
     
     args = parser.parse_args()
     
-    # Enforce minimum 30-minute duration
+    # Enforce minimum 5-minute duration
     duration = max(5, args.duration)
     if args.duration < 5:
         logger.warning(f"Duration {args.duration} minutes is below minimum. Using 5 minutes.")
@@ -830,7 +1047,12 @@ def main():
     )
     
     benchmark = AutomatedBenchmark(config)
-    success = benchmark.run_complete_benchmark()
+    
+    # Check if single algorithm testing is requested
+    if args.algorithm:
+        success = benchmark.run_single_algorithm_test(args.algorithm)
+    else:
+        success = benchmark.run_complete_benchmark()
     
     sys.exit(0 if success else 1)
 

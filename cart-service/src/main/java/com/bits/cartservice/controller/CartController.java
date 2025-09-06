@@ -24,9 +24,11 @@ public class CartController {
     private final CartService cartService;
     private final Counter addToCartCounter;
     private final Counter cartViewCounter;
+    private final DegradationController degradationController;
     
-    public CartController(CartService cartService, MeterRegistry meterRegistry) {
+    public CartController(CartService cartService, MeterRegistry meterRegistry, DegradationController degradationController) {
         this.cartService = cartService;
+        this.degradationController = degradationController;
         this.addToCartCounter = Counter.builder("cart_items_added_total")
                 .description("Total number of items added to cart")
                 .register(meterRegistry);
@@ -42,6 +44,14 @@ public class CartController {
         String sessionId = extractOrCreateSessionId(request);
         
         log.info("Fetching cart for user: {}, session: {}", userId, sessionId);
+
+        // Inject artificial latency if active
+        degradationController.injectLatencyIfActive();
+        
+        // Inject 500 errors if active
+        if (degradationController.shouldInjectError()) {
+            throw new RuntimeException("Simulated cart service error for testing");
+        }
         
         CartResponse response;
         if (userId != null) {
@@ -59,6 +69,14 @@ public class CartController {
     public ResponseEntity<CartResponse> addToCart(
             @Valid @RequestBody AddToCartRequest request,
             HttpServletRequest httpRequest) {
+        
+        // Inject artificial latency if active
+        degradationController.injectLatencyIfActive();
+        
+        // Inject 500 errors if active
+        if (degradationController.shouldInjectError()) {
+            throw new RuntimeException("Simulated cart service error for testing");
+        }
         
         String userId = extractUserId(httpRequest);
         String sessionId = extractOrCreateSessionId(httpRequest);

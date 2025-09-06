@@ -29,7 +29,11 @@ public class RLApiLoadBalancer implements Loadbalancer {
     private volatile int totalDecisions = 0;
     private volatile int rlDecisions = 0;
     private volatile int fallbackDecisions = 0;
+    private volatile int confidenceFallbacks = 0;
     private volatile boolean rlApiHealthy = false;
+    
+    // Confidence threshold for decision making (configurable) - lowered to allow learning
+    private static final double CONFIDENCE_THRESHOLD = 0.3;
     
     @Autowired
     public RLApiLoadBalancer(RLDecisionClient rlDecisionClient,
@@ -72,6 +76,15 @@ public class RLApiLoadBalancer implements Loadbalancer {
             logger.debug("RL API call for service {} took: {}ms", serviceName, (rlApiCallEnd - rlApiCallStart));
             
             if (decision != null && decision.selectedPod != null) {
+                // NEW: Confidence-based decision making
+                if (decision.confidence < CONFIDENCE_THRESHOLD) {
+                    confidenceFallbacks++;
+                    logger.info("Low confidence RL decision ({:.2f} < {:.2f}) for {}, using fallback", 
+                               decision.confidence, CONFIDENCE_THRESHOLD, serviceName);
+                    loadBalancerMetrics.recordRLFallback(serviceName, "low_confidence");
+                    return useFallback(serviceName);
+                }
+                
                 // Find the selected service instance
                 ServiceInfo selectedService = findServiceByPodName(serviceName, decision.selectedPod);
                 
@@ -83,8 +96,8 @@ public class RLApiLoadBalancer implements Loadbalancer {
                             decision.decisionType != null ? decision.decisionType : "rl_decision", 
                             decision.confidence);
                     
-                    logger.debug("RL decision: {} -> {} (confidence: {:.2f}, type: {})", 
-                        serviceName, decision.selectedPod, decision.confidence, decision.decisionType);
+                    logger.info("High confidence RL decision ({:.2f}) for {}: {}", 
+                        decision.confidence, serviceName, decision.selectedPod);
                     return selectedService;
                 } else {
                     logger.warn("RL selected pod {} not found for service {}", decision.selectedPod, serviceName);
@@ -116,15 +129,17 @@ public class RLApiLoadBalancer implements Loadbalancer {
     }
     
     /**
-     * Get routing statistics
+     * Get routing statistics including confidence-based fallbacks
      */
     public RoutingStats getRoutingStats() {
         return new RoutingStats(
             totalDecisions,
             rlDecisions,
             fallbackDecisions,
+            confidenceFallbacks,
             rlApiHealthy,
-            totalDecisions > 0 ? (double) rlDecisions / totalDecisions : 0.0
+            totalDecisions > 0 ? (double) rlDecisions / totalDecisions : 0.0,
+            totalDecisions > 0 ? (double) confidenceFallbacks / totalDecisions : 0.0
         );
     }
     
@@ -190,16 +205,21 @@ public class RLApiLoadBalancer implements Loadbalancer {
         public final int totalDecisions;
         public final int rlDecisions;
         public final int fallbackDecisions;
+        public final int confidenceFallbacks;
         public final boolean rlApiHealthy;
         public final double rlSuccessRate;
+        public final double confidenceFallbackRate;
         
         public RoutingStats(int totalDecisions, int rlDecisions, int fallbackDecisions, 
-                           boolean rlApiHealthy, double rlSuccessRate) {
+                           int confidenceFallbacks, boolean rlApiHealthy, double rlSuccessRate,
+                           double confidenceFallbackRate) {
             this.totalDecisions = totalDecisions;
             this.rlDecisions = rlDecisions;
             this.fallbackDecisions = fallbackDecisions;
+            this.confidenceFallbacks = confidenceFallbacks;
             this.rlApiHealthy = rlApiHealthy;
             this.rlSuccessRate = rlSuccessRate;
+            this.confidenceFallbackRate = confidenceFallbackRate;
         }
     }
 }

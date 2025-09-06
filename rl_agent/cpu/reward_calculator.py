@@ -64,14 +64,8 @@ class RewardCalculator:
             current_metrics, previous_metrics
         )
 
-        # Calculate weighted total reward
-        total_reward = (
-                self.config.latency_weight * reward_components['latency'] +
-                self.config.error_rate_weight * reward_components['error_rate'] +
-                self.config.throughput_weight * reward_components['throughput'] +
-                self.config.utilization_balance_weight * reward_components['load_balance'] +
-                0.5 * reward_components['stability']  # Stability weight
-        )
+        # Calculate mathematically correct normalized reward
+        total_reward = self._calculate_normalized_reward(reward_components)
 
         # Apply action-specific modifiers
         total_reward = self._apply_action_modifiers(
@@ -89,6 +83,83 @@ class RewardCalculator:
             'action': action_taken
         })
 
+        return total_reward
+
+    def _calculate_normalized_reward(self, reward_components: Dict[str, float]) -> float:
+        """
+        Calculate mathematically correct normalized reward.
+        
+        This method:
+        1. Normalizes each component to [-1, 1] range using tanh
+        2. Validates and normalizes weights to sum to 1.0
+        3. Applies proper mathematical combination
+        
+        Args:
+            reward_components: Dictionary of raw reward components
+            
+        Returns:
+            Normalized total reward in range [-1, 1]
+        """
+        # Step 1: Normalize each component to [-1, 1] range
+        normalized_components = {}
+        
+        for component, raw_value in reward_components.items():
+            if raw_value is None:
+                normalized_components[component] = 0.0
+                continue
+                
+            # Apply tanh normalization to bound values in [-1, 1]
+            if component == 'latency':
+                # Lower latency is better: negative raw values become positive normalized
+                normalized_components[component] = np.tanh(-raw_value)
+            elif component == 'error_rate':
+                # Lower error rate is better: negative raw values become positive normalized  
+                normalized_components[component] = np.tanh(-raw_value)
+            elif component == 'throughput':
+                # Higher throughput is better: positive raw values stay positive
+                normalized_components[component] = np.tanh(raw_value)
+            elif component == 'load_balance':
+                # Better balance is better: positive raw values stay positive
+                normalized_components[component] = np.tanh(raw_value)
+            elif component == 'stability':
+                # Higher stability is better: positive raw values stay positive
+                normalized_components[component] = np.tanh(raw_value)
+            else:
+                # Default: apply tanh normalization
+                normalized_components[component] = np.tanh(raw_value)
+        
+        # Step 2: Get and validate weights
+        weights = {
+            'latency': self.config.latency_weight,
+            'error_rate': self.config.error_rate_weight,
+            'throughput': self.config.throughput_weight,
+            'load_balance': self.config.utilization_balance_weight,
+            'stability': self.config.stability_weight
+        }
+        
+        # Step 3: Normalize weights to sum to 1.0
+        total_weight = sum(abs(w) for w in weights.values())
+        if total_weight == 0:
+            # Fallback to equal weights if all weights are zero
+            normalized_weights = {k: 1.0 / len(weights) for k in weights}
+            rl_logger.logger.warning("All reward weights are zero, using equal weights")
+        else:
+            normalized_weights = {k: abs(v) / total_weight for k, v in weights.items()}
+        
+        # Step 4: Calculate final weighted reward
+        total_reward = sum(
+            normalized_weights[component] * normalized_components[component]
+            for component in normalized_weights
+            if component in normalized_components
+        )
+        
+        # Step 5: Log normalization details for debugging
+        rl_logger.logger.debug(
+            f"Reward normalization: raw_components={reward_components}, "
+            f"normalized_components={normalized_components}, "
+            f"weights={normalized_weights}, total_reward={total_reward}"
+        )
+        
         return total_reward
 
     def _calculate_latency_reward(self,
@@ -333,20 +404,24 @@ class RewardCalculator:
                 break
 
         if target_service:
-            # Penalty for routing to overloaded services
-            if (target_service.cpu_usage_percent and
-                    target_service.cpu_usage_percent > 80):
-                modified_reward -= 2.0
+            # More sensitive CPU-based penalties
+            if target_service.cpu_usage_percent:
+                cpu_usage = target_service.cpu_usage_percent
+                if cpu_usage > 60:  # Lower threshold from 80
+                    modified_reward -= (cpu_usage - 60) * 0.1  # Gradual penalty
+                elif cpu_usage < 30:
+                    modified_reward += (30 - cpu_usage) * 0.05  # Gradual bonus
 
             # Penalty for routing to services with high error rates
             if (target_service.error_rate_percent and
                     target_service.error_rate_percent > 5.0):
                 modified_reward -= 3.0
 
-            # Bonus for routing to underutilized services
-            if (target_service.cpu_usage_percent and
-                    target_service.cpu_usage_percent < 30):
-                modified_reward += 1.0
+            # Response time penalty (more sensitive)
+            if target_service.avg_response_time_ms:
+                response_time = target_service.avg_response_time_ms
+                if response_time > 50:  # Penalty for response time > 50ms
+                    modified_reward -= (response_time - 50) * 0.02
 
         return modified_reward
 

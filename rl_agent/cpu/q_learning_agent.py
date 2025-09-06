@@ -48,6 +48,10 @@ class QLearningAgent:
         self.state_cache = {}
         self.action_cache = {}
         self.action_cache_ttl = 2.0  # 2 second cache for actions
+        
+        # Persistence tracking
+        self.updates_since_save = 0
+        self.save_frequency = 50  # Save every 50 Q-table updates
         self.state_cache_ttl = 3.0   # 3 second cache for states
 
         rl_logger.logger.info(f"Q-Learning Agent initialized with caching (action_ttl={self.action_cache_ttl}s, state_ttl={self.state_cache_ttl}s)")
@@ -118,14 +122,17 @@ class QLearningAgent:
             q_table=self.q_table,
             available_actions=available_actions,
             epsilon=self.current_epsilon,
-            episode=self.episode_count
+            episode=self.episode_count,
+            current_metrics=current_metrics
         )
 
-        # Update agent state
+        # Update internal state for next iteration
         self.previous_state = self.current_state
         self.current_state = state_key
         self.last_action = selected_action
-        
+
+        rl_logger.logger.debug(f"State transition: {self.previous_state} -> {self.current_state}, action: {selected_action}")
+
         # Cache the selected action
         self.action_cache[cache_key] = (selected_action, current_time)
         
@@ -185,10 +192,21 @@ class QLearningAgent:
             new_metrics: Metrics after action execution
             previous_metrics: Metrics before action execution
         """
-        if (self.previous_state is None or
-                self.last_action is None or
-                self.current_state is None):
-            rl_logger.logger.warning("Cannot update Q-table: missing state/action information")
+        # Initialize missing state information if needed
+        if self.current_state is None:
+            self.current_state = self.state_encoder.encode_state(previous_metrics)
+            rl_logger.logger.info(f"Initialized current_state from previous_metrics: {self.current_state}")
+        
+        if self.previous_state is None:
+            # For the first update, use current_state as previous_state
+            self.previous_state = self.current_state
+            rl_logger.logger.info(f"Initialized previous_state from current_state: {self.previous_state}")
+        
+        if self.last_action is None:
+            rl_logger.logger.warning("Cannot update Q-table: missing last_action information")
+            # Still update states for next iteration
+            self.previous_state = self.current_state
+            self.current_state = self.state_encoder.encode_state(new_metrics)
             return
 
         # Calculate reward
@@ -261,6 +279,17 @@ class QLearningAgent:
             'reward': reward,
             'td_error': td_error
         })
+
+        # Periodic persistence - save every N updates
+        self.updates_since_save += 1
+        if self.updates_since_save >= self.save_frequency:
+            try:
+                self.save_model()
+                rl_logger.logger.info(f"💾 Auto-saved Q-table after {self.updates_since_save} updates (size: {len(self.q_table)})")
+                self.updates_since_save = 0
+            except Exception as e:
+                rl_logger.logger.warning(f"Failed to auto-save Q-table: {e}")
+                # Continue without failing the update
 
     def _get_possible_actions_for_state(self, state: Tuple[int, ...]) -> List[str]:
         """Get possible actions for a given state from Q-table history"""
@@ -465,3 +494,63 @@ class QLearningAgent:
         self.reward_calculator = RewardCalculator()
 
         rl_logger.logger.info("Q-Learning Agent reset to initial state")
+    
+    def reset_for_reward_fix(self, backup_path: Optional[str] = None):
+        """
+        Reset Q-table specifically for reward normalization fix.
+        
+        This method:
+        1. Backs up existing Q-table (learned with broken rewards)
+        2. Resets all learning state
+        3. Prepares for retraining with fixed reward function
+        
+        Args:
+            backup_path: Optional path to save backup of old Q-table
+        """
+        # Backup existing Q-table before reset
+        if backup_path:
+            try:
+                backup_data = {
+                    'q_table_broken_rewards': dict(self.q_table),
+                    'episode_count': self.episode_count,
+                    'epsilon': self.current_epsilon,
+                    'backup_reason': 'reward_normalization_fix',
+                    'backup_timestamp': time.time()
+                }
+                self.persistence.save_model(backup_data, backup_path)
+                rl_logger.logger.info(f"Backed up broken Q-table to: {backup_path}")
+            except Exception as e:
+                rl_logger.logger.error(f"Failed to backup Q-table: {e}")
+        
+        # Log current state before reset
+        old_q_size = len(self.q_table)
+        old_epsilon = self.current_epsilon
+        old_episodes = self.episode_count
+        
+        # Complete reset for mathematical compatibility
+        self.q_table.clear()
+        self.current_epsilon = self.config.epsilon_start  # High exploration
+        self.episode_count = 0
+        self.episode_rewards.clear()
+        self.episode_steps.clear()
+        self.q_value_history.clear()
+        
+        # Clear caches to prevent stale data
+        self.state_cache.clear()
+        self.action_cache.clear()
+        
+        # Reset components with fresh instances
+        self.action_selector = ActionSelector()
+        self.reward_calculator = RewardCalculator()
+        
+        rl_logger.logger.warning(
+            f"Q-TABLE RESET FOR REWARD FIX: "
+            f"Old Q-table size: {old_q_size}, "
+            f"Old epsilon: {old_epsilon:.3f}, "
+            f"Old episodes: {old_episodes} | "
+            f"Reset to: size=0, epsilon={self.current_epsilon:.3f}, episodes=0"
+        )
+        
+        rl_logger.logger.info(
+            "Agent ready for retraining with mathematically correct reward function"
+        )

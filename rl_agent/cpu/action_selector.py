@@ -19,30 +19,47 @@ class ActionSelector:
         self.action_history = []
         self.action_performance = {}
 
-    def get_available_actions(self, service_instances: List[ServiceInstance]) -> List[str]:
+    def get_available_actions(self, service_instances: List) -> List[str]:
         """
         Get list of available actions from current service instances.
+        Handles both ServiceInstance objects and dictionary representations.
 
         Args:
-            service_instances: List of available service instances
+            service_instances: List of available service instances (objects or dicts)
 
         Returns:
             List of action identifiers (instance IDs)
         """
-        # Filter only healthy instances
-        healthy_instances = [
-            instance for instance in service_instances
-            if instance.status == "healthy"
-        ]
+        actions = []
+        
+        for instance in service_instances:
+            try:
+                # Handle dictionary format (from load balancer client)
+                if isinstance(instance, dict):
+                    # Assume all instances from load balancer are healthy
+                    instance_id = instance.get('instanceName') or instance.get('url', 'unknown')
+                    if instance_id != 'unknown':
+                        actions.append(instance_id)
+                # Handle ServiceInstance object format
+                elif hasattr(instance, 'status') and hasattr(instance, 'instance_id'):
+                    if instance.status == "healthy":
+                        actions.append(instance.instance_id)
+                # Handle other object formats
+                elif hasattr(instance, 'instance_id'):
+                    actions.append(instance.instance_id)
+                else:
+                    # Fallback: use string representation
+                    actions.append(str(instance))
+                    
+            except Exception as e:
+                rl_logger.logger.warning(f"Failed to extract action from instance {instance}: {e}")
+                continue
 
-        if not healthy_instances:
-            rl_logger.logger.warning("No healthy instances available for action selection")
+        if not actions:
+            rl_logger.logger.warning("No valid instances available for action selection")
             return []
 
-        # Return instance IDs as actions
-        actions = [instance.instance_id for instance in healthy_instances]
-
-        rl_logger.logger.debug(f"Available actions: {len(actions)} healthy instances")
+        rl_logger.logger.debug(f"Available actions: {len(actions)} instances extracted")
         return actions
 
     def select_action(self,
@@ -50,7 +67,8 @@ class ActionSelector:
                       q_table: Dict[Tuple, float],
                       available_actions: List[str],
                       epsilon: float,
-                      episode: int = 0) -> str:
+                      episode: int = 0,
+                      current_metrics: List = None) -> str:
         """
         Select action using epsilon-greedy strategy with enhancements.
 
@@ -79,7 +97,7 @@ class ActionSelector:
         step_start = time.time()
         if random.random() < adaptive_epsilon:
             # Exploration: Choose action based on exploration strategy
-            action = self._exploration_strategy(available_actions, state_key, q_table)
+            action = self._exploration_strategy(available_actions, state_key, q_table, current_metrics)
             selection_type = "exploration"
         else:
             # Exploitation: Choose best known action
@@ -115,6 +133,11 @@ class ActionSelector:
 
     def _calculate_adaptive_epsilon(self, base_epsilon: float, episode: int) -> float:
         """Calculate adaptive epsilon based on learning progress"""
+        # Check if benchmark/production mode is enabled
+        if hasattr(self.config, 'benchmark_mode') and self.config.benchmark_mode:
+            # Ultra-low exploration for benchmarks
+            return self.config.production_epsilon
+        
         # Standard exponential decay
         decayed_epsilon = max(
             self.config.epsilon_min,
@@ -126,37 +149,40 @@ class ActionSelector:
         # 1. Boost exploration if performance is stagnating OR low diversity
         if len(self.action_history) > 50:
             recent_diversity = self._calculate_action_diversity()
-            if recent_diversity < 0.4:  # Increased diversity threshold for load balancing
-                decayed_epsilon = min(1.0, decayed_epsilon * 2.0)  # Stronger boost
+            # Reduced diversity threshold for production (0.4 -> 0.3)
+            if recent_diversity < 0.3:
+                decayed_epsilon = min(1.0, decayed_epsilon * 1.5)  # Reduced boost (2.0 -> 1.5)
 
-        # 2. Maintain minimum exploration for load balancing
-        min_epsilon_for_balancing = 0.05  # Always maintain 5% exploration
+        # 2. Maintain minimum exploration for load balancing (reduced for production)
+        min_epsilon_for_balancing = 0.02  # Reduced from 0.05 to 0.02
         decayed_epsilon = max(min_epsilon_for_balancing, decayed_epsilon)
 
-        # 3. Reduce exploration only if diversity is maintained
+        # 3. Reduce exploration more aggressively if performance is good
         if episode > self.config.exploration_episodes:
             recent_diversity = self._calculate_action_diversity()
             performance_score = self._get_recent_performance_score()
-            # More stringent diversity requirement for load balancing
-            if performance_score > 0.8 and recent_diversity > 0.7:  # Increased diversity threshold
-                decayed_epsilon *= 0.8  # Less aggressive reduction to maintain exploration
+            # More aggressive exploration reduction for production
+            if performance_score > 0.7 and recent_diversity > 0.5:  # Lowered thresholds
+                decayed_epsilon *= 0.7  # More aggressive reduction (0.8 -> 0.7)
 
         return decayed_epsilon
 
     def _exploration_strategy(self,
                               available_actions: List[str],
                               state_key: Tuple[int, ...],
-                              q_table: Dict[Tuple, float]) -> str:
+                              q_table: Dict[Tuple, float],
+                              current_metrics: List = None) -> str:
         """
-        Enhanced exploration strategy beyond pure random selection.
+        Enhanced exploration strategy with smart safety constraints.
+        Avoids exploring critically overloaded pods while maintaining learning.
         """
         # Strategy 1: Upper Confidence Bound (UCB) exploration
         if len(self.action_history) > 10:
             action = self._ucb_selection(available_actions, state_key, q_table)
-            if action:
+            if action and self._is_safe_to_explore(action, current_metrics):
                 return action
 
-        # Strategy 2: Least-tried action exploration
+        # Strategy 2: Safe least-tried action exploration
         action_counts = self._get_action_counts()
         least_tried_actions = [
             action for action in available_actions
@@ -165,11 +191,31 @@ class ActionSelector:
             )
         ]
 
-        if least_tried_actions:
-            return random.choice(least_tried_actions)
+        # Filter out critically overloaded pods from exploration
+        safe_least_tried = [
+            action for action in least_tried_actions
+            if self._is_safe_to_explore(action, current_metrics)
+        ]
 
-        # Fallback: Pure random selection
-        return random.choice(available_actions)
+        if safe_least_tried:
+            return random.choice(safe_least_tried)
+        elif least_tried_actions:
+            # If no safe options, still explore but log warning
+            action = random.choice(least_tried_actions)
+            logger.warning(f"Exploring potentially overloaded pod: {action}")
+            return action
+
+        # Fallback: Pure random selection (with safety check)
+        safe_actions = [
+            action for action in available_actions
+            if self._is_safe_to_explore(action, current_metrics)
+        ]
+        
+        if safe_actions:
+            return random.choice(safe_actions)
+        else:
+            # Emergency fallback - system is completely overloaded
+            return random.choice(available_actions)
 
     def _exploitation_strategy(self,
                                state_key: Tuple[int, ...],
@@ -295,6 +341,50 @@ class ActionSelector:
             action = history_item['action']
             action_counts[action] = action_counts.get(action, 0) + 1
         return action_counts
+
+    def _is_safe_to_explore(self, action: str, current_metrics: List = None) -> bool:
+        """
+        Check if it's safe to explore a given action based on current pod health.
+        Prevents exploration of critically overloaded pods.
+        """
+        if not current_metrics:
+            logger.info(f"No metrics available for safety check of {action}, assuming safe")
+            return True  # No metrics available, assume safe
+        
+        try:
+            # Debug: Log what metrics we have
+            logger.info(f"Safety check for {action}: checking {len(current_metrics)} metrics")
+            
+            # Find metrics for the specific pod
+            for metric in current_metrics:
+                if hasattr(metric, 'instance_id') and metric.instance_id == action:
+                    logger.debug(f"Found metrics for {action}: CPU={getattr(metric, 'cpu_usage_percent', 'N/A')}%")
+                    
+                    # Check CPU usage - avoid exploring pods with >95% CPU
+                    if hasattr(metric, 'cpu_usage_percent') and metric.cpu_usage_percent is not None:
+                        if metric.cpu_usage_percent > 95:
+                            logger.info(f"🚫 Skipping exploration of overloaded pod {action} (CPU: {metric.cpu_usage_percent}%)")
+                            return False
+                    
+                    # Check memory usage - avoid exploring pods with >95% memory
+                    if hasattr(metric, 'jvm_memory_usage_percent') and metric.jvm_memory_usage_percent is not None:
+                        if metric.jvm_memory_usage_percent > 95:
+                            logger.debug(f"Skipping exploration of memory-constrained pod {action} (Memory: {metric.jvm_memory_usage_percent}%)")
+                            return False
+                    
+                    # Check error rate - avoid exploring pods with high error rates
+                    if hasattr(metric, 'error_rate_percent') and metric.error_rate_percent is not None:
+                        if metric.error_rate_percent > 10:  # >10% error rate
+                            logger.debug(f"Skipping exploration of error-prone pod {action} (Errors: {metric.error_rate_percent}%)")
+                            return False
+                    
+                    break
+            
+            return True  # Safe to explore
+            
+        except Exception as e:
+            logger.warning(f"Error checking pod safety for {action}: {e}")
+            return True  # Default to safe if check fails
 
     def _get_best_performing_action(self, actions: List[str]) -> str:
         """Get best performing action from the list based on historical data"""

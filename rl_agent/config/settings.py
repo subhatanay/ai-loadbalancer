@@ -34,3 +34,9 @@ class Settings(BaseSettings):
         env_prefix = "RL_AGENT_"
 
 settings = Settings()
+
+# Legacy compatibility exports
+LOAD_BALANCER_HOST = settings.loadbalancer_host
+LOAD_BALANCER_PORT = settings.loadbalancer_port
+PROMETHEUS_HOST = settings.prometheus_host
+PROMETHEUS_PORT = settings.prometheus_port

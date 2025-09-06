@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
-import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.util.List;
@@ -63,8 +62,7 @@ public class RLDecisionClient {
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(RoutingDecision.class)
-                .timeout(Duration.ofMillis(2000)) // Fast timeout for low latency
-                .retryWhen(Retry.fixedDelay(1, Duration.ofMillis(10)))
+                .timeout(Duration.ofMillis(300)) // Reduced timeout for aggressive performance
                 .doOnSuccess(decision -> logger.info("RL decision SUCCESS: {} -> {} ({}ms)", 
                     serviceName, decision.selectedPod, decision.decisionTimeMs))
                 .doOnError(error -> {
