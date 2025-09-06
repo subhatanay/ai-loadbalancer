@@ -407,7 +407,32 @@ The engine follows a continuous learning cycle:
 
 #### 4.3.2 Core Engine Components
 
-The RL-Agent is composed of several key internal components that work together to achieve adaptive learning.
+The RL-Agent is composed of several key internal components that work together to achieve adaptive learning. The following diagram illustrates how a request flows through these components.
+
+```mermaid
+graph TD
+    subgraph RL-Agent Internal Logic
+        A[POST /decide] --> B(QLearningAgent);
+        B --> C{StateEncoder};
+        C -- Encoded State --> B;
+        B --> D{ActionSelector};
+        D -- Selected Pod --> B;
+        B --> E[Return Pod to LB];
+
+        F[POST /feedback] --> B;
+        B --> G{RewardCalculator};
+        G -- Calculated Reward --> B;
+        B --> H{Update Q-Table};
+        H --> I[Q-Table Updated];
+    end
+
+    style B fill:#f9f,stroke:#333,stroke-width:2px
+    style C fill:#bbf,stroke:#333,stroke-width:1px
+    style D fill:#bbf,stroke:#333,stroke-width:1px
+    style G fill:#bbf,stroke:#333,stroke-width:1px
+    style H fill:#bbf,stroke:#333,stroke-width:1px
+```
+*Figure 4.3: RL-Agent Internal Component Flow*
 
 ##### 1. StateEncoder
 *   **Concept**: The `StateEncoder` is the agent's perception layer. It translates the messy, continuous, real-world metrics from Prometheus into a clean, discrete, and simplified "state" that the Q-learning algorithm can understand and use.
