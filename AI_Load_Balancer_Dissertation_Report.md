@@ -740,7 +740,6 @@ public ServiceInfo geNextServiceInstance(String serviceName) {
 private long getActiveConnections(ServiceInfo instance) {
     return activeConnections.computeIfAbsent(instance.getUrl(), k -> new AtomicLong(0)).get();
 }
-```
 
 ### 5.3 RL-Agent Based Load Balancing
 
@@ -772,8 +771,6 @@ public ServiceInfo geNextServiceInstance(String serviceName) {
 ```
 
 ### 5.4 RL-Agent: Core Implementation
-
-This section details the key Python code snippets from the RL-Agent itself.
 
 #### 5.4.1 StateEncoder: Discretizing Metrics
 The `StateEncoder` converts continuous metrics (like 42.5% CPU) into discrete bins (like bin `1` for 25-50% CPU) that the agent can learn from.
@@ -880,417 +877,30 @@ def select_action(self, current_metrics, available_instances):
     return selected_action
 ```
 
-### 5.1 AI Load Balancer: Algorithm Switching
+### 5.5 RL-Agent API
 
-The AI Load Balancer is designed to be flexible, allowing the routing strategy to be changed dynamically. The core of this logic resides in the `RoutingStrategyAlgorithm` class, which acts as a factory to provide the currently active load balancing implementation.
-
-*   **Strategy Selection**: A `switch` statement is used to select the appropriate algorithm based on a configuration property. This allows for easy A/B testing and fallback capabilities.
-
-```java
-// In RoutingStrategyAlgorithm.java
-
-public class RoutingStrategyAlgorithm {
-
-    @Value("${loadbalancer.routing-strategy:round-robin}")
-    private String routingStrategy;
-
-    // ... (Autowired instances of each load balancer)
-
-    public Loadbalancer getLoadbalancer() {
-        return switch (routingStrategy) {
-            case "least-connections" -> leastConnectionsLoadBalancer;
-            case "rl-agent" -> rlApiLoadBalancer; // The primary AI-based algorithm
-            case "rl-static" -> rlBasedLoadbalancer; // A version with a static, pre-loaded model
-            default -> roundRobinLoadBalancer; // Default to Round Robin
-        };
-    }
-}
-```
-
-### 5.2 Traditional Load Balancing Algorithms
-
-As baselines for comparison, two traditional algorithms were implemented.
-
-#### 5.2.1 Round Robin
-This is the simplest algorithm. It maintains a counter and cycles through the list of available service instances sequentially.
-
-```java
-// In RoundRobinBasedLoadbalancer.java
-
-public ServiceInfo geNextServiceInstance(String serviceName) {
-    Service service = serviceRegistry.getService(serviceName);
-    List<ServiceInfo> healthyInstances = service.getHealthyInstances();
-
-    if (healthyInstances.isEmpty()) {
-        return null;
-    }
-
-    // Get current index, increment it, and use modulo for circular behavior
-    int index = service.getInstanceIndex().getAndIncrement() % healthyInstances.size();
-    return healthyInstances.get(index);
-}
-```
-
-#### 5.2.2 Least Connections
-This algorithm tracks the number of active connections to each service instance and sends the next request to the instance with the fewest connections.
-
-```java
-// In LeastConnectionsLoadBalancer.java
-
-// A map to track active connections for each instance URL
-private final Map<String, AtomicLong> activeConnections = new ConcurrentHashMap<>();
-
-public ServiceInfo geNextServiceInstance(String serviceName) {
-    List<ServiceInfo> healthyInstances = service.getHealthyInstances();
-    
-    // Find the instance with the minimum number of active connections
-    ServiceInfo selectedInstance = healthyInstances.stream()
-            .min(Comparator.comparing(this::getActiveConnections))
-            .orElse(null);
-
-    if (selectedInstance != null) {
-        // Increment the connection count for the chosen instance
-        incrementConnections(selectedInstance.getUrl());
-    }
-    
-    return selectedInstance;
-}
-
-private long getActiveConnections(ServiceInfo instance) {
-    return activeConnections.computeIfAbsent(instance.getUrl(), k -> new AtomicLong(0)).get();
-}
-```
-
-### 5.3 RL-Agent Based Load Balancing
-
-The primary AI-driven algorithm communicates with the Python-based RL-Agent via a REST API to get its routing decisions.
-
-*   **Decision and Fallback**: The implementation requests a decision from the RL-Agent. If the agent fails to respond or returns an invalid instance, the system gracefully falls back to the Round Robin algorithm to ensure high availability.
-
-```java
-// In RLBasedLoadbalancer.java (Simplified)
-
-public ServiceInfo geNextServiceInstance(String serviceName) {
-    try {
-        // 1. Make an API call to the RL-Agent to get the best pod name
-        String targetPodName = rlDecisionClient.getDecision(serviceName);
-
-        // 2. Validate that the chosen pod is healthy and available
-        ServiceInfo targetService = findHealthyServiceByPodName(serviceName, targetPodName);
-        
-        if (targetService != null) {
-            return targetService; // Return the AI's choice
-        }
-    } catch (Exception e) {
-        logger.warn("RL decision failed, falling back...");
-    }
-    
-    // 3. If anything fails, use the fallback algorithm
-    return fallbackLoadbalancer.geNextServiceInstance(serviceName);
-}
-```
-
-### 5.4 RL-Agent: Core Implementation
-
-This section details the key Python code snippets from the RL-Agent itself.
-
-#### 5.4.1 StateEncoder: Discretizing Metrics
-The `StateEncoder` converts continuous metrics (like 42.5% CPU) into discrete bins (like bin `1` for 25-50% CPU) that the agent can learn from.
+The RL-Agent exposes a REST API for the load balancer to query routing decisions.
 
 ```python
-# In StateEncoder class
+# In rl_agent/api.py
 
-def _fast_encode_state(self, metrics_dict: Dict[str, float]) -> Tuple[int, ...]:
-    encoded = []
-    
-    # CPU usage (0-4 bins)
-    cpu = metrics_dict.get('cpu_usage_percent', 0)
-    cpu_bin = min(4, int(cpu / 25)) # Divides CPU % by 25 to get bin index
-    encoded.append(cpu_bin)
-    
-    # ... (similar logic for memory, latency, etc.)
-    
-    return tuple(encoded)
-```
+## 7. Conclusions and Recommendations
 
-#### 5.4.2 ActionSelector: Epsilon-Greedy Strategy
-The `ActionSelector` implements the core exploration vs. exploitation logic. With probability `epsilon`, it explores a random action; otherwise, it exploits the best-known action.
+This final chapter summarizes the key conclusions drawn from the project and provides recommendations for future work, outlining potential avenues for extending and enhancing the capabilities of the AI-Powered Load Balancer.
 
-```python
-# In ActionSelector class
+### 7.1 Conclusions
 
-def select_action(self, state_key, q_table, available_actions, epsilon):
-    if random.random() < epsilon:
-        # Exploration: Choose a random, safe action
-        action = self._exploration_strategy(available_actions)
-    else:
-        # Exploitation: Choose the best-known action from the Q-table
-        action = self._exploitation_strategy(state_key, q_table, available_actions)
-    
-    return action
-```
+This project successfully designed, implemented, and validated an adaptive load balancing system that leverages reinforcement learning to optimize traffic distribution in a complex microservices environment. The research and development process has led to several key conclusions:
 
-#### 5.4.3 QLearningAgent: The Bellman Equation
-The core learning happens in the `_update_q_value` method, which is a direct implementation of the Bellman equation. It updates the agent's knowledge based on the outcome of an action.
+1.  **Reinforcement Learning is a Viable and Effective Solution for Dynamic Load Balancing**: The empirical results demonstrate that the RL-Agent, despite a modest increase in per-request latency, can achieve significantly higher system throughput and reliability compared to traditional algorithms. This confirms that an agent-based learning approach can capture the complex dynamics of a microservices environment and make more effective, holistic decisions.
 
-```python
-# In QLearningAgent class
+2.  **Multi-Objective Optimization is Crucial**: The success of the RL-Agent was heavily dependent on a well-designed, multi-objective reward function. Early iterations that over-weighted a single metric (e.g., error rate) led to poor learning. The final, normalized reward function that balances latency, errors, throughput, and stability was critical for achieving a robust and balanced performance profile.
 
-def _update_q_value(self, state, action, reward, next_state):
-    # Get the current Q-value (what we thought would happen)
-    current_q = self.q_table.get((state, action), 0.0)
+3.  **The Trade-off Between Intelligence and Latency is Real but Manageable**: The project confirmed that introducing an intelligent decision-making layer adds computational overhead. However, it also demonstrated that this latency can be effectively managed. By co-locating the RL-Agent with the load balancer as a sidecar, network latency was eliminated, and while a computational delay remains, its negative impact is more than offset by the system-wide gains in throughput and error reduction.
 
-    # Find the best possible Q-value for the next state
-    max_next_q = max([self.q_table.get((next_state, a), 0.0) for a in actions])
+4.  **Offline Training is a Safe and Effective Strategy**: The offline training methodology proved to be a robust approach for bootstrapping the agent's knowledge base. It allowed for safe, rapid iteration on the model and its hyperparameters without any risk to a live system, providing a stable foundation of knowledge before the agent was deployed.
 
-    # Bellman equation: Calculate the new Q-value based on the actual reward
-    # and the potential future reward.
-    new_q = current_q + self.config.learning_rate * \
-            (reward + self.config.discount_factor * max_next_q - current_q)
-
-    # Update the Q-table with the new, more accurate value
-    self.q_table[(state, action)] = new_q
-```
-
-#### 5.4.4 RewardCalculator: Multi-Objective Reward
-The `RewardCalculator` combines multiple performance objectives into a single reward signal. It normalizes each component and then combines them using a weighted sum.
-
-```python
-# In RewardCalculator class
-
-def _calculate_normalized_reward(self, reward_components: Dict[str, float]) -> float:
-    # 1. Normalize each component (e.g., latency, error) to a [-1, 1] range
-    normalized_components = {k: np.tanh(v) for k, v in reward_components.items()}
-
-    # 2. Get weights from config (e.g., latency_weight = 0.35)
-    weights = self.config.weights
-    
-    # 3. Normalize weights to ensure they sum to 1.0
-    total_weight = sum(weights.values())
-    normalized_weights = {k: v / total_weight for k, v in weights.items()}
-    
-    # 4. Calculate the final weighted reward
-    total_reward = sum(normalized_weights[c] * normalized_components[c] for c in components)
-    
-    return total_reward
-```
-
-#### 5.4.5 Performance Optimization: Caching
-To ensure the RL-Agent can make decisions with minimal latency, an aggressive caching layer is implemented. For states that have been seen very recently, the agent can return a cached decision almost instantly.
-
-```python
-# In QLearningAgent class
-
-def select_action(self, current_metrics, available_instances):
-    # Create a cache key from the current metrics
-    cache_key = self._get_action_cache_key(current_metrics, available_instances)
-    current_time = time.time()
-    
-    # If a valid, non-expired entry is in the cache, return it immediately
-    if cache_key in self.action_cache:
-        cached_action, cache_time = self.action_cache[cache_key]
-        if current_time - cache_time < self.action_cache_ttl: # e.g., 2 seconds
-            return cached_action
-    
-    # ... (if not in cache, proceed with normal decision logic)
-    
-    # Store the new decision in the cache before returning
-    self.action_cache[cache_key] = (selected_action, current_time)
-    return selected_action
-```
-
-### 5.1 AI Load Balancer: Algorithm Switching
-
-The AI Load Balancer is designed to be flexible, allowing the routing strategy to be changed dynamically. The core of this logic resides in the `RoutingStrategyAlgorithm` class, which acts as a factory to provide the currently active load balancing implementation.
-
-*   **Strategy Selection**: A `switch` statement is used to select the appropriate algorithm based on a configuration property. This allows for easy A/B testing and fallback capabilities.
-
-```java
-// In RoutingStrategyAlgorithm.java
-
-public class RoutingStrategyAlgorithm {
-
-    @Value("${loadbalancer.routing-strategy:round-robin}")
-    private String routingStrategy;
-
-    // ... (Autowired instances of each load balancer)
-
-    public Loadbalancer getLoadbalancer() {
-        return switch (routingStrategy) {
-            case "least-connections" -> leastConnectionsLoadBalancer;
-            case "rl-agent" -> rlApiLoadBalancer; // The primary AI-based algorithm
-            default -> roundRobinLoadBalancer; // Default to Round Robin
-        };
-    }
-}
-```
-
-### 5.2 Traditional Load Balancing Algorithms
-
-As baselines for comparison, two traditional algorithms were implemented.
-
-#### 5.2.1 Round Robin
-This is the simplest algorithm. It maintains a counter and cycles through the list of available service instances sequentially.
-
-```java
-// In RoundRobinBasedLoadbalancer.java
-
-public ServiceInfo geNextServiceInstance(String serviceName) {
-    Service service = serviceRegistry.getService(serviceName);
-    List<ServiceInfo> healthyInstances = service.getHealthyInstances();
-
-    if (healthyInstances.isEmpty()) {
-        return null;
-    }
-
-    // Get current index, increment it, and use modulo for circular behavior
-    int index = service.getInstanceIndex().getAndIncrement() % healthyInstances.size();
-    return healthyInstances.get(index);
-}
-```
-
-#### 5.2.2 Least Connections
-This algorithm tracks the number of active connections to each service instance and sends the next request to the instance with the fewest connections.
-
-```java
-// In LeastConnectionsLoadBalancer.java
-
-// A map to track active connections for each instance URL
-private final Map<String, AtomicLong> activeConnections = new ConcurrentHashMap<>();
-
-public ServiceInfo geNextServiceInstance(String serviceName) {
-    List<ServiceInfo> healthyInstances = service.getHealthyInstances();
-    
-    // Find the instance with the minimum number of active connections
-    ServiceInfo selectedInstance = healthyInstances.stream()
-            .min(Comparator.comparing(this::getActiveConnections))
-            .orElse(null);
-
-    if (selectedInstance != null) {
-        // Increment the connection count for the chosen instance
-        incrementConnections(selectedInstance.getUrl());
-    }
-    
-    return selectedInstance;
-}
-
-private long getActiveConnections(ServiceInfo instance) {
-    return activeConnections.computeIfAbsent(instance.getUrl(), k -> new AtomicLong(0)).get();
-}
-```
-
-### 5.3 RL-Agent Based Load Balancing
-
-The primary AI-driven algorithm communicates with the Python-based RL-Agent via a REST API to get its routing decisions.
-
-*   **Decision and Fallback**: The implementation requests a decision from the RL-Agent. If the agent fails to respond or returns an invalid instance, the system gracefully falls back to the Round Robin algorithm to ensure high availability.
-
-```java
-// In RLBasedLoadbalancer.java (Simplified)
-
-public ServiceInfo geNextServiceInstance(String serviceName) {
-    try {
-        // 1. Make an API call to the RL-Agent to get the best pod name
-        String targetPodName = rlDecisionClient.getDecision(serviceName);
-
-        // 2. Validate that the chosen pod is healthy and available
-        ServiceInfo targetService = findHealthyServiceByPodName(serviceName, targetPodName);
-        
-        if (targetService != null) {
-            return targetService; // Return the AI's choice
-        }
-    } catch (Exception e) {
-        logger.warn("RL decision failed, falling back...");
-    }
-    
-    // 3. If anything fails, use the fallback algorithm
-    return fallbackLoadbalancer.geNextServiceInstance(serviceName);
-}
-```
-
-### 5.4 RL-Agent: Core Implementation
-
-This section details the key Python code snippets from the RL-Agent itself.
-
-#### 5.4.1 StateEncoder: Discretizing Metrics
-The `StateEncoder` converts continuous metrics (like 42.5% CPU) into discrete bins (like bin `1` for 25-50% CPU) that the agent can learn from.
-
-```python
-# In StateEncoder class
-
-def _fast_encode_state(self, metrics_dict: Dict[str, float]) -> Tuple[int, ...]:
-    encoded = []
-    
-    // CPU usage (0-4 bins)
-    cpu = metrics_dict.get('cpu_usage_percent', 0)
-    cpu_bin = min(4, int(cpu / 25)) // Divides CPU % by 25 to get bin index
-    encoded.append(cpu_bin)
-    
-    // ... (similar logic for memory, latency, etc.)
-    
-    return tuple(encoded)
-```
-
-#### 5.4.2 ActionSelector: Epsilon-Greedy Strategy
-The `ActionSelector` implements the core exploration vs. exploitation logic. With probability `epsilon`, it explores a random action; otherwise, it exploits the best-known action.
-
-```python
-# In ActionSelector class
-
-def _is_safe_to_explore(self, action: str, current_metrics: List) -> bool:
-    # ... logic to find metrics for the specific pod ...
-    
-    # Avoid exploring pods with >95% CPU
-    if metric.cpu_usage_percent is not None and metric.cpu_usage_percent > 95:
-        logger.info(f"Skipping exploration of overloaded pod {action} (CPU: {metric.cpu_usage_percent}%)")
-        return False
-        
-    # Avoid exploring pods with >95% Memory
-    if metric.jvm_memory_usage_percent is not None and metric.jvm_memory_usage_percent > 95:
-        logger.info(f"Skipping exploration of overloaded pod {action} (Memory: {metric.jvm_memory_usage_percent}%)")
-        return False
-
-    return True
-```
-
-### 5.4 Multi-Objective Reward Calculation
-
-The `RewardCalculator` implements a sophisticated, multi-objective reward function. It normalizes each performance component to a `[-1, 1]` range using the `tanh` function and then combines them using configurable weights. This ensures that all objectives are considered in a balanced way.
-
-```python
-# In RewardCalculator class
-
-def _calculate_normalized_reward(self, reward_components: Dict[str, float]) -> float:
-    """
-    Calculates a mathematically correct normalized reward.
-    """
-    # Step 1: Normalize each component to [-1, 1] range using tanh
-    # Lower is better for latency/errors, so we use a negative sign
-    normalized_components = {
-        'latency': np.tanh(-reward_components.get('latency', 0) / 1000.0), # scale to seconds
-        'error_rate': np.tanh(-reward_components.get('error_rate', 0)),
-        'throughput': np.tanh(reward_components.get('throughput', 0) / 100.0), # scale
-        # ... other components
-    }
-
-    # Step 2: Get and normalize weights from config to sum to 1.0
-    weights = self.config.reward_weights
-    total_weight = sum(abs(w) for w in weights.values())
-    if total_weight == 0:
-        return 0.0
-    normalized_weights = {k: abs(v) / total_weight for k, v in weights.items()}
-
-    # Step 3: Calculate final weighted reward
-    total_reward = sum(
-        normalized_weights.get(comp, 0) * norm_val
-        for comp, norm_val in normalized_components.items()
-    )
-
-    return total_reward
-```
-This implementation ensures that the agent learns to balance competing objectives according to the priorities defined in the configuration, leading to a robust and well-rounded performance optimization.
-
----
+In summary, this dissertation provides strong evidence that AI-powered, adaptive load balancing is not just a theoretical concept but a practical and superior alternative to the static, heuristic-based methods that are prevalent today.
 
 ## 6. Observed Performance Metrics
 
