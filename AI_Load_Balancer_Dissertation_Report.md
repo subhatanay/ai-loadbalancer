@@ -340,9 +340,64 @@ Below is a detailed description of each microservice, its responsibilities, depe
 | `GET` | `/api/notifications` | Retrieves a user's notification history. |
 | `PUT` | `/api/notifications/{id}/status` | Marks a notification as read or archived. |
 
+#### 4.2.7 End-to-End Order Placement Flow
+To illustrate how these microservices collaborate, the following diagram traces the sequence of interactions required for a user to place an order. This flow highlights the orchestration role of the `Order Service` and the central gateway function of the `AI Load Balancer`.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant AILoadBalancer as AI Load Balancer
+    participant UserService as User Service
+    participant OrderService as Order Service
+    participant InventoryService as Inventory Service
+    participant PaymentService as Payment Service
+    participant CartService as Cart Service
+    participant NotificationService as Notification Service
+
+    Note over Client, UserService: 1. User Authentication
+    Client->>+AILoadBalancer: POST /api/users/login
+    AILoadBalancer->>+UserService: Forward login request
+    UserService-->>-AILoadBalancer: Returns JWT Token
+    AILoadBalancer-->>-Client: JWT Token
+
+    Note over Client, OrderService: 2. Place Order with Token
+    Client->>+AILoadBalancer: POST /api/orders (Auth: JWT)
+    AILoadBalancer->>+OrderService: Forward request
+
+    Note over OrderService, InventoryService: 3. Reserve Stock
+    OrderService->>+InventoryService: POST /api/inventory/reserve
+    InventoryService-->>-OrderService: Reservation ID
+
+    Note over OrderService, PaymentService: 4. Process Payment
+    OrderService->>+PaymentService: POST /api/payments
+    PaymentService-->>-OrderService: Payment Success
+
+    Note over OrderService, InventoryService: 5. Confirm Stock Reservation
+    OrderService->>+InventoryService: POST /api/inventory/confirm/{reservationId}
+    InventoryService-->>-OrderService: Stock Confirmed
+
+    Note over OrderService, CartService: 6. Clear User's Cart
+    OrderService->>+CartService: POST /api/cart/{userId}/convert-to-order
+    CartService-->>-Order_Service: Cart Cleared
+
+    Note over OrderService, OrderService: 7. Finalize and Persist Order
+    OrderService->>OrderService: Save Order to DB (Status: PAID)
+
+    Note over OrderService, NotificationService: 8. Send Confirmation Email
+    OrderService->>+NotificationService: POST /api/notifications
+    NotificationService-->>-OrderService: Notification Sent
+
+    Note over OrderService, Client: 9. Return Final Response
+    OrderService-->>-AILoadBalancer: 201 Created (Order Details)
+    AILoadBalancer-->>-Client: 201 Created (Order Details)
+```
+*Figure 4.2: End-to-End Order Placement Sequence*
+
 ### 4.3 Reinforcement Learning Engine
 
 The core intelligence of the system resides in the RL-Agent. This component is responsible for observing the environment, making routing decisions, and learning from the outcomes. It is built using Python, with NumPy and Pandas for data manipulation.
+
+#### 4.3.1 The Learning Cycle
 
 The engine follows a continuous learning cycle:
 1.  **Observe**: The agent collects real-time metrics (CPU, memory, latency, errors) for all service pods from Prometheus.
@@ -350,64 +405,52 @@ The engine follows a continuous learning cycle:
 3.  **Act**: The AI Load Balancer executes the decision by forwarding the request to the chosen pod.
 4.  **Learn**: The load balancer sends feedback (response time, success/failure) to the agent, which calculates a numerical reward or penalty. This reward is used to update the Q-table, refining the agent's knowledge for future decisions.
 
-The following diagram illustrates the detailed interaction between the Load Balancer and the RL-Agent:
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant LoadBalancer as AI Load Balancer
-    participant RLAgent as RL-Agent API
-    participant Service as Backend Service Pod
-    participant Prometheus
-
-    Client->>+LoadBalancer: 1. Sends HTTP Request
-    LoadBalancer->>+RLAgent: 2. POST /decide (service info)
-    RLAgent->>+Prometheus: 3. Fetch real-time metrics for all active pods
-    Prometheus-->>-RLAgent: 4. Return metrics (CPU, memory, etc.)
-    RLAgent->>RLAgent: 5. Select best pod using Q-Learning
-    RLAgent-->>-LoadBalancer: 6. Return selected pod name
-    LoadBalancer->>+Service: 7. Forward request to selected pod
-    Service-->>-LoadBalancer: 8. Return response
-    LoadBalancer-->>-Client: 9. Return final response
-    LoadBalancer->>+RLAgent: 10. POST /feedback (outcome)
-    RLAgent->>RLAgent: 11. Calculate reward & update Q-table
-    RLAgent-->>-LoadBalancer: 12. Acknowledge feedback
-```
-*Figure 4.2: RL-Agent and Load Balancer Interaction Flow*
-
-#### Core Components of the RL Engine
+#### 4.3.2 Core Engine Components
 
 The RL-Agent is composed of several key internal components that work together to achieve adaptive learning.
 
-```mermaid
-graph TD
-    subgraph RL-Agent Internal Logic
-        A[POST /decide] --> B(QLearningAgent);
-        B --> C{StateEncoder};
-        C -- Encoded State --> B;
-        B --> D{ActionSelector};
-        D -- Selected Pod --> B;
-        B --> E[Return Pod to LB];
+##### 1. StateEncoder
+*   **Concept**: The `StateEncoder` is the agent's perception layer. It translates the messy, continuous, real-world metrics from Prometheus into a clean, discrete, and simplified "state" that the Q-learning algorithm can understand and use.
+*   **Algorithm Logic**:
+    *   It takes raw, continuous metrics like CPU usage (e.g., 42.5%) or response time (e.g., 85ms).
+    *   It uses a "binning" strategy to group these continuous values into a finite number of buckets.
+    *   For example, CPU usage might be divided into four bins: `low` (0-25%), `moderate` (25-50%), `high` (50-75%), and `critical` (75-100%).
+    *   It combines the bin values for all metrics (CPU, memory, latency, etc.) into a single tuple, which represents the current state of the system (e.g., `(cpu_moderate, memory_low, latency_low)`).
+*   **Example**: If a pod has 30% CPU usage and 15% memory usage, the `StateEncoder` converts this to a state like `(1, 0)`, which the Q-table can use as a key.
 
-        F[POST /feedback] --> B;
-        B --> G{RewardCalculator};
-        G -- Calculated Reward --> B;
-        B --> H{Update Q-Table};
-        H --> I[Q-Table Updated];
-    end
+##### 2. ActionSelector
+*   **Concept**: The `ActionSelector` is the agent's decision-making component. It is responsible for choosing which pod to route the next request to, balancing the need to use the best-known option with the need to explore other options.
+*   **Algorithm Logic**:
+    *   It implements an **epsilon-greedy** strategy to manage the **Exploration vs. Exploitation** dilemma.
+    *   With probability `1-epsilon`, it **exploits** by choosing the pod with the highest known Q-value for the current state.
+    *   With probability `epsilon`, it **explores** by choosing a random pod from the available options.
+    *   The value of `epsilon` (the exploration rate) starts high and gradually decreases over time, allowing the agent to explore a lot initially and then exploit its knowledge more as it becomes more confident.
+*   **Example**: If `epsilon` is 0.1, there is a 90% chance the agent will pick the pod it *thinks* is best, and a 10% chance it will pick a random pod just to see what happens.
 
-    style B fill:#f9f,stroke:#333,stroke-width:2px
-    style C fill:#bbf,stroke:#333,stroke-width:1px
-    style D fill:#bbf,stroke:#333,stroke-width:1px
-    style G fill:#bbf,stroke:#333,stroke-width:1px
-    style H fill:#bbf,stroke:#333,stroke-width:1px
-```
-*Figure 4.3: RL-Agent Internal Component Flow*
+##### 3. QLearningAgent
+*   **Concept**: This is the brain of the operation. It manages the agent's memory (the Q-table) and implements the core learning algorithm that allows the agent to improve from experience.
+*   **Algorithm Logic**:
+    *   It stores a **Q-table**, which is a dictionary mapping `(state, action)` pairs to a numerical value representing the expected future reward (the Q-value).
+    *   After an action is taken, it receives the resulting `reward` and the `next_state` of the system.
+    *   It updates the Q-table using the **Bellman equation**, which adjusts the Q-value based on the immediate reward received plus the discounted potential for future rewards from the next state.
+*   **Example**: If routing to `pod-A` in `state-1` resulted in a high reward, the Q-value for `(state-1, pod-A)` is increased, making the agent more likely to choose `pod-A` again when it encounters `state-1`.
 
-1.  **StateEncoder**: This component is responsible for converting the raw, continuous metrics from Prometheus into a discrete, simplified "state" that the Q-learning algorithm can use. It groups continuous values (e.g., CPU usage of 42.5%) into bins (e.g., `cpu_moderate`), making it possible for the agent to learn patterns effectively.
-2.  **ActionSelector**: Once the state is encoded, this component decides which pod to send the request to. It implements an epsilon-greedy strategy to balance **exploitation** (choosing the pod with the highest known Q-value for the current state) and **exploration** (occasionally trying a different pod to discover changes in the environment).
-3.  **QLearningAgent**: This is the brain of the operation. It manages the **Q-table** (a dictionary mapping state-action pairs to expected rewards) and updates it using the Bellman equation. This update rule adjusts the Q-value based on the immediate reward received and the potential for future rewards, allowing the agent to learn from experience.
-4.  **RewardCalculator**: This component converts the raw outcome of an action (e.g., 85ms response time, success) into a single, numerical reward signal. It uses a multi-objective function that balances latency, errors, throughput, and system stability, ensuring the agent learns to optimize for a holistic definition of performance.
+##### 4. RewardCalculator
+*   **Concept**: The `RewardCalculator` defines the agent's goals. It converts the raw outcome of an action (e.g., response time, success/failure) into a single, numerical reward signal that tells the agent whether its decision was "good" or "bad".
+*   **Algorithm Logic**:
+    *   It uses a **multi-objective function** that considers several performance metrics simultaneously.
+    *   Each metric (latency, errors, throughput, etc.) is normalized to a standard range (e.g., -1 to 1).
+    *   The normalized values are combined using a weighted sum, where the weights are configured to reflect the business priorities (e.g., is low latency more important than high throughput?).
+*   **Example**: A fast response with no errors results in a high positive reward (e.g., `+0.9`). A slow response that results in an error generates a large negative reward (e.g., `-1.0`).
+
+#### 4.3.3 RL-Agent API Endpoints
+
+The AI Load Balancer communicates with the RL-Agent via a simple, two-endpoint REST API.
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/decide` | The load balancer calls this endpoint to get a routing decision. It sends the service name, and the agent returns the name of the optimal pod to route the request to. |
+| `POST` | `/feedback`| After the request is completed, the load balancer calls this endpoint to provide feedback on the outcome (e.g., response time, success/failure). The agent uses this to calculate a reward and update its Q-table. |
 
 ### 4.4 Monitoring and Observability Stack
 
