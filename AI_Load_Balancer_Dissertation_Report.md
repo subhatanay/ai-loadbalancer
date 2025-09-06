@@ -484,7 +484,8 @@ A robust monitoring stack is critical for providing the real-time data needed fo
 *   **Prometheus**: The core of the stack, Prometheus scrapes and stores time-series metrics from all microservices, the load balancer, and the host systems.
 *   **Grafana**: Provides visualization for the data stored in Prometheus. Pre-configured dashboards offer at-a-glance views of system KPIs, including request rates, latency, error rates, resource utilization, and the RL-Agent's decision patterns.
 *   **Micrometer**: A vendor-neutral application metrics facade integrated into each Spring Boot service to expose JVM-level and application-level metrics in a Prometheus-compatible format.
-*   **Fluent Bit**: A lightweight log processor and forwarder used in the Kubernetes deployment to aggregate logs from all pods, enabling centralized log analysis.
+*   **Fluent Bit**: A lightweight log processor and forwarder that collects logs from all running pods within the Kubernetes cluster.
+*   **OpenSearch**: The aggregated logs from Fluent Bit are sent to an OpenSearch cluster. OpenSearch provides a powerful, scalable search engine and visualization interface (OpenSearch Dashboards), allowing developers to easily search, analyze, and create dashboards from the centralized log data to debug issues and monitor application behavior.
 
 **Significance for the AI Load Balancer:**
 *   **Provides the Senses for the RL-Agent**: The monitoring stack is not just for human operators; it is a fundamental part of the AI's control loop. The RL-Agent uses Prometheus as its "eyes and ears" to observe the state of the environment before making a decision.
@@ -499,11 +500,16 @@ A robust monitoring stack is critical for providing the real-time data needed fo
 
 ### 4.5 Deployment Architecture
 
-The entire ecosystem is designed to be deployed in a containerized environment orchestrated by Kubernetes. This approach provides scalability, resilience, and portability.
+The entire ecosystem is designed to be deployed in a containerized environment orchestrated by Kubernetes. Before diving into the specifics, it's helpful to understand two fundamental concepts in Kubernetes:
+*   **Pods**: The smallest deployable units in Kubernetes. A pod represents a single instance of a running process in your cluster and can contain one or more containers. In our architecture, each microservice replica runs in its own pod.
+*   **Services**: An abstract way to expose an application running on a set of Pods as a network service. Kubernetes gives pods their own IP addresses, but they are ephemeral. A Service provides a stable, single DNS name and IP address that automatically load-balances traffic to the correct group of pods, even as they are created or destroyed.
+
+This architecture leverages these concepts to create a scalable and resilient system.
 
 *   **Containerization**: Each microservice is packaged as a Docker image.
+*   **Cluster Setup (Kind)**: For local development and testing, the Kubernetes cluster was provisioned using **Kind (Kubernetes in Docker)**. Kind runs a complete, multi-node Kubernetes cluster within Docker containers on a single machine. This provided a lightweight, fast, and consistent way to spin up and tear down a realistic cluster environment without the overhead of a full cloud-based setup.
 *   **Orchestration**: Kubernetes is used to manage the deployment, scaling, networking, and health of all containers.
-*   **Service Discovery**: Kubernetes provides built-in DNS-based service discovery. Services can communicate with each other using stable hostnames (e.g., `http://cart-service.ai-loadbalancer.svc.cluster.local:8082`), abstracting away the individual pod IPs.
+*   **Service Discovery (Redis-Based)**: While Kubernetes provides its own DNS for service-to-service communication, our AI Load Balancer requires a more dynamic, real-time registry of available service *instances* (pods). To achieve this, we implemented a custom service discovery mechanism using Redis. Each microservice instance, upon starting up, **pushes** its identity and network address to a known key in Redis with a short time-to-live (TTL). The AI Load Balancer continuously **pulls** this list of active instances from Redis, giving it a real-time, highly available view of all healthy pods it can route traffic to.
 *   **AI-Agent Co-location**: A key design decision is the deployment of the RL-Agent. Instead of running as a separate, standalone service that would introduce network latency into every decision, the RL-Agent container is deployed within the *same pod* as the AI Load Balancer. This **sidecar pattern** ensures that communication between the load balancer and the agent occurs over the local pod network (`localhost`), minimizing decision latency to sub-millisecond levels.
 
 The following diagram provides a detailed view of the Kubernetes deployment, showing the pods, replica counts, and the co-located AI-Agent sidecar.
