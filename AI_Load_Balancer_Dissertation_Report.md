@@ -1256,52 +1256,88 @@ After the request is completed, the load balancer sends the outcome back to the 
 }
 ```
 
-### Appendix E: Environment Setup Guide
+### Appendix E: Environment Setup and Execution Guide
 
-This guide outlines the necessary tools, technologies, and dependencies required to build, deploy, and test the AI Load Balancer project. It is intended for developers who wish to replicate the research environment.
+This guide provides a concise set of instructions for setting up the project environment, deploying the services, and running key processes like load testing and benchmarking.
 
-#### Core Technologies
-*   **Java**: Version 17 or higher (for all microservices).
-*   **Maven**: Version 3.8 or higher (for building the Java projects).
-*   **Python**: Version 3.10 or higher (for the RL-Agent and load testing framework).
-*   **Docker**: Latest stable version (for containerizing all applications).
-*   **Kubernetes**: A local cluster is required. The project was developed and tested using **`kind`** (Kubernetes in Docker).
-*   **`kubectl`**: The Kubernetes command-line tool for interacting with the cluster.
+#### 1. Prerequisite Stack
 
-#### Infrastructure Services
+Ensure the following tools are installed on your local machine:
+*   **Docker**: For building and running containerized services.
+*   **`kubectl`**: The command-line tool for interacting with Kubernetes.
+*   **`kind`**: For running a local Kubernetes cluster inside Docker.
+*   **Java 17 & Maven**: For building the microservices.
+*   **Python 3.10+ & Pip**: For running the RL-Agent and testing scripts.
 
-The following services are required and are typically run as containers within the Kubernetes cluster:
+#### 2. Deploy the Kubernetes Cluster
 
-*   **PostgreSQL**: For primary data persistence.
-*   **Redis**: For caching and session management.
-*   **Apache Kafka**: For the asynchronous messaging queue.
-*   **Prometheus**: For metrics collection.
-*   **Grafana**: For data visualization and dashboards.
-
-#### Python RL-Agent Dependencies
-
-The Python environment for the RL-Agent has several key dependencies. These can be installed from the `rl_agent/requirements.txt` file using `pip`:
+These commands build all application images and deploy the entire stack to a local `kind` cluster.
 
 ```bash
-# From the rl_agent directory
+# Navigate to the kubernetes-stack directory
+cd kubernetes-stack
+
+# 1. Build all Docker images for the microservices
+./build.sh
+
+# 2. Start the kind cluster and deploy all services
+./startup.sh
+
+# 3. Start the port-forwarding to access the loadbalancer service.
+kubectl port-forward -n ai-loadbalancer service/ai-loadbalancer-service 8080:8080
+``` 
+
+#### 3. Access the Grafana Dashboard
+
+To visualize system performance and the RL-Agent's behavior, forward the Grafana port.
+
+```bash
+# Run this in a new terminal
+kubectl port-forward -n ai-loadbalancer service/grafana-service 3000:3000
+```
+*   **URL**: `http://localhost:3000`
+*   **Login**: `admin` / `admin`
+
+#### 4. Run a Load Test (for RL Training)
+
+This command executes a comprehensive load test designed to generate training data for the RL model.
+
+```bash
+# Navigate to the load-testing directory
+cd load-testing
+
+# 1. Install Python dependencies
 pip install -r requirements.txt
+
+# 2. Run the comprehensive training scenario (this can take 3+ hours)
+python rl_training_executor.py --mode comprehensive
 ```
 
-**Key Python Libraries:**
-*   **`fastapi`**: For creating the agent's high-performance REST API.
-*   **`uvicorn`**: For serving the FastAPI application.
-*   **`numpy` & `scikit-learn`**: For numerical operations and machine learning utilities (e.g., state binning).
-*   **`prometheus-api-client`**: For querying metrics from the Prometheus server.
-*   **`pydantic`**: For data validation and settings management.
-*   **`locust`**: (In the `load-testing` directory) For running the load tests.
+#### 5. Run an Automated Benchmark
+
+This script runs a fair, head-to-head comparison of the different load balancing algorithms.
+
+```bash
+# Navigate to the load-testing directory
+cd load-testing
+
+# Run the benchmark using a specific configuration
+python3 automated_benchmark.py  --duration 15 --users 20 --ramp-up 5 --url http://localhost:8080
+```
 
 ### Appendix F: Glossary
 
 *   **Action**: In the context of this project, a decision made by the RL-Agent to route an incoming request to a specific backend pod.
 
+*   **Bellman Equation**: A fundamental equation in reinforcement learning used to update the value of a state-action pair based on the immediate reward and the discounted value of the optimal future state.
+
 *   **Discount Factor (Gamma / γ)**: A hyperparameter in Q-learning, between 0 and 1, that determines the importance of future rewards. A higher value makes the agent prioritize long-term gains.
 
 *   **Epsilon-Greedy**: An exploration strategy where the agent chooses a random action with a probability of epsilon (ε) and the best-known action with a probability of 1-ε. This balances exploration of new strategies with exploitation of known good ones.
+
+*   **Exploitation**: Choosing the action with the highest known expected reward in a given state.
+
+*   **Exploration**: Choosing a non-optimal action to gather more information about the environment.
 
 *   **Learning Rate (Alpha / α)**: A hyperparameter that controls how much new information overrides old information. It determines how quickly the agent adapts its Q-values.
 
@@ -1311,27 +1347,16 @@ pip install -r requirements.txt
 
 *   **Q-Learning**: A model-free reinforcement learning algorithm that learns a policy indicating the best action to take in any given state. It does this by learning a Q-value for each state-action pair.
 
+*   **Q-table**: A data structure, typically a dictionary or table, used in tabular Q-learning to store the Q-values for all possible state-action pairs.
+
 *   **Q-Value**: A value that represents the quality of a state-action pair. It is the expected cumulative future reward an agent will receive by taking a specific action in a specific state and following the optimal policy thereafter.
 
 *   **Reward**: A numerical signal that the environment sends to the agent in response to an action. The agent's goal is to maximize the cumulative reward over time.
+
+*   **Reward Function**: A function that defines the goal in a reinforcement learning problem. It takes the outcome of an action as input and returns a numerical reward or penalty.
 
 *   **Sidecar Pattern**: A deployment pattern in which a secondary container is deployed alongside a primary application container. In this project, the RL-Agent runs as a sidecar to the AI Load Balancer to minimize communication latency.
 
 *   **State**: A discrete representation of the system's condition at a specific point in time, derived from a set of continuous metrics (e.g., CPU, memory, latency).
 
 *   **Throughput**: A measure of the system's performance, typically quantified as the number of requests processed per unit of time (e.g., requests per second).
----
-
-## 10. Glossary
-
-*   **Bellman Equation**: A fundamental equation in reinforcement learning used to update the value of a state-action pair based on the immediate reward and the discounted value of the optimal future state.
-*   **Discount Factor (Gamma)**: A hyperparameter between 0 and 1 that determines the present value of future rewards. A high gamma means the agent is farsighted.
-*   **Epsilon-Greedy**: An exploration strategy in RL where the agent chooses a random action with probability epsilon and the best-known action with probability 1-epsilon.
-*   **Exploitation**: Choosing the action with the highest known expected reward in a given state.
-*   **Exploration**: Choosing a non-optimal action to gather more information about the environment.
-*   **Learning Rate (Alpha)**: A hyperparameter that determines how much new information overrides old information. A high alpha means the agent learns faster but can be more unstable.
-*   **Q-learning**: A model-free reinforcement learning algorithm that learns a policy indicating the best action to take in each state. It does this by learning a Q-function that estimates the expected reward for taking a given action in a given state.
-*   **Q-table**: A data structure, typically a dictionary or table, used in tabular Q-learning to store the Q-values for all possible state-action pairs.
-*   **Reward Function**: A function that defines the goal in a reinforcement learning problem. It takes the outcome of an action as input and returns a numerical reward or penalty.
-*   **State**: A representation of the environment at a specific point in time. In this project, a state is a tuple of discretized performance metrics.
-*   **Sidecar Pattern**: A deployment pattern where a secondary container is deployed in the same pod as a primary application container to provide supporting functionality, such as service mesh logic or, in this case, the RL-Agent.
