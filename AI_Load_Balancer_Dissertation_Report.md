@@ -152,48 +152,14 @@ The successful implementation of this project is expected to yield several key b
 
 ## 3. Detailed Plan of Work
 
-The project was executed over a period of several months and was broken down into four distinct phases, each with its own set of objectives and milestones. This structured approach ensured that foundational components were in place before more complex, dependent systems were developed.
+The project was executed through a systematic, multi-phase plan, progressing from foundational infrastructure to advanced AI implementation and validation. The following table outlines the key stages and activities undertaken.
 
-**Phase 1: Foundation and System Scaffolding (Weeks 1-4)**
-
-*   **Objective**: To build a realistic, fully functional e-commerce application and the underlying infrastructure to serve as a testbed for the AI load balancer.
-*   **Key Milestones**:
-    *   Development of core microservices (User, Inventory, Order).
-    *   Containerization of all services using Docker.
-    *   Setup of initial data persistence layers (PostgreSQL, Redis).
-    *   Creation of a local development environment using Docker Compose.
-    *   Implementation of basic API gateways and inter-service communication.
-
-**Phase 2: Observability and RL-Agent Development (Weeks 5-8)**
-
-*   **Objective**: To implement a comprehensive monitoring solution and develop the core components of the reinforcement learning agent.
-*   **Key Milestones**:
-    *   Deployment of the Prometheus and Grafana monitoring stack.
-    *   Instrumentation of all microservices with Micrometer to expose performance metrics.
-    *   Development of the initial RL-Agent service with a basic Q-learning algorithm.
-    *   Creation of the `/decide` and `/feedback` API endpoints for agent interaction.
-    *   Integration of the RL-Agent with Prometheus to consume real-time metrics.
-
-**Phase 3: Training, Testing, and Iteration (Weeks 9-12)**
-
-*   **Objective**: To develop a robust load testing framework, create an offline training pipeline, and iteratively improve the RL-agent's performance.
-*   **Key Milestones**:
-    *   Development of the Python-based load testing framework capable of simulating realistic user journeys.
-    *   Creation of the offline training pipeline to train the Q-table from pre-collected experience data.
-    *   Execution of multiple training runs to build the agent's initial knowledge base.
-    *   Implementation of a benchmarking suite to compare the RL-agent against traditional algorithms (Round Robin, Least Connections).
-    *   Analysis of initial benchmark results and iterative refinement of the agent's reward function and hyperparameters.
-
-**Phase 4: Deployment and Validation (Weeks 13-16)**
-
-*   **Objective**: To deploy the entire ecosystem to a production-like Kubernetes environment and validate its performance and resilience under realistic conditions.
-*   **Key Milestones**:
-    *   Creation of Kubernetes deployment and service configuration files for all components.
-    *   Deployment of the full application stack to a local Kubernetes cluster (`kind`).
-    *   Implementation of the RL-Agent as a sidecar container within the AI Load Balancer pod to minimize latency.
-    *   Execution of comprehensive end-to-end tests and performance benchmarks in the Kubernetes environment.
-    *   Final analysis of results and documentation of findings.
-
+| Phase | Objective | Key Activities |
+| :--- | :--- | :--- |
+| **1. Foundation & Baseline Setup** | Establish the core microservices architecture and baseline traditional load balancing. | - Develop a complex, multi-service e-commerce backend.<br>- Containerize services and deploy on Kubernetes.<br>- Implement service discovery and baseline algorithms (e.g., Round Robin). |
+| **2. Monitoring & Intelligence** | Implement system-wide monitoring and build the core reinforcement learning agent. | - Build a monitoring stack with Prometheus for metrics collection.<br>- Create service-specific Grafana dashboards for visualization.<br>- Develop the RL-Agent with a decision engine and a REST API. |
+| **3. Data Generation & Training** | Create a framework for generating realistic load and training the RL model from observed data. | - Build a load testing framework to simulate diverse user traffic.<br>- Develop an offline training pipeline to process collected experience.<br>- Execute comprehensive, long-duration load tests to gather a rich dataset.<br>- Use the offline trainer to generate the initial Q-table model. |
+| **4. Benchmarking & Validation** | Rigorously test and compare the performance of the AI load balancer against traditional methods. | - Deploy the trained model for live, AI-driven decision-making.<br>- Create adaptive scenarios (e.g., pod degradation) to test learning.<br>- Conduct final benchmark tests comparing the RL-Agent vs. traditional algorithms.<br>- Analyze and document the comparative performance results. |
 ---
 
 ## 4. System Architecture Overview
