@@ -152,14 +152,28 @@ The successful implementation of this project is expected to yield several key b
 
 ## 3. Detailed Plan of Work
 
-The project was executed over a 16-week timeline, systematically progressing from foundational infrastructure to advanced AI implementation and validation. The work was divided into the following key stages:
+The project was executed over a 16-week timeline, systematically progressing from foundational infrastructure to advanced AI implementation and validation. The following table provides a detailed week-by-week breakdown of the work plan.
 
-| Weeks   | Phase                                       | Key Activities                                                                                                                                                                                                                                                                                           |
-| :------ | :------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1-4** | **Phase 1: Foundation & System Scaffolding**  | - **Week 1:** Initialize repository, develop core microservices, and set up the database.<br>- **Week 2:** Implement e-commerce business logic and containerize all services with Docker.<br>- **Week 3:** Author Kubernetes configurations and deploy the full application stack.<br>- **Week 4:** Implement a baseline Round Robin load balancer and validate the end-to-end system.                                                              |
-| **5-8** | **Phase 2: Monitoring & Intelligence Layer**  | - **Week 5:** Deploy Prometheus & Grafana; instrument services for custom metrics.<br>- **Week 6:** Design and develop the core Python-based RL-Agent architecture.<br>- **Week 7:** Implement the Q-learning algorithm, multi-objective reward function, and API.<br>- **Week 8:** Integrate the Load Balancer with the RL-Agent and deploy as a sidecar.                                                                    |
-| **9-12**| **Phase 3: Load Testing & Offline Training**  | - **Week 9:** Build a sophisticated load testing framework with diverse user profiles.<br>- **Week 10:** Create an experience collection pipeline to log system state during tests.<br>- **Week 11:** Execute a 12-hour load test and develop the offline training script.<br>- **Week 12:** Process the collected data to bootstrap the initial Q-table model and deploy it.                                                              |
-| **13-16**| **Phase 4: Benchmarking & Validation**        | - **Week 13:** Conduct rigorous performance benchmarks comparing the RL-Agent to traditional algorithms.<br>- **Week 14:** Test the agent's adaptability by simulating a gradually degrading service pod.<br>- **Week 15:** Validate the agent's learning by introducing artificial network latency.<br>- **Week 16:** Perform final analysis of all results and complete the dissertation report.  
+| Week | Phase | Key Activities |
+| :--- | :--- | :--- |
+| **1** | Foundation & System Scaffolding | - Initialize repository, develop core microservices, and set up the database. |
+| **2** | Foundation & System Scaffolding | - Implement e-commerce business logic and containerize all services with Docker. |
+| **3** | Foundation & System Scaffolding | - Author Kubernetes configurations and deploy the full application stack. |
+| **4** | Foundation & System Scaffolding | - Implement a baseline Round Robin load balancer and validate the end-to-end system. |
+| **5** | Monitoring & Intelligence Layer | - Deploy Prometheus & Grafana; instrument services for custom metrics. |
+| **6** | Monitoring & Intelligence Layer | - Design and develop the core Python-based RL-Agent architecture. |
+| **7** | Monitoring & Intelligence Layer | - Implement the Q-learning algorithm, multi-objective reward function, and API. |
+| **8** | Monitoring & Intelligence Layer | - Integrate the Load Balancer with the RL-Agent and deploy as a sidecar. |
+| **9** | Load Testing & Offline Training | - Build a sophisticated load testing framework with diverse user profiles. |
+| **10** | Load Testing & Offline Training | - Create an experience collection pipeline to log system state during tests. |
+| **11** | Load Testing & Offline Training | - Execute a 12-hour load test and develop the offline training script. |
+| **12** | Load Testing & Offline Training | - Process the collected data to bootstrap the initial Q-table model and deploy it. |
+| **13** | Benchmarking & Validation | - Conduct rigorous performance benchmarks comparing the RL-Agent to traditional algorithms. |
+| **14** | Benchmarking & Validation | - Test the agent's adaptability by simulating a gradually degrading service pod. |
+| **15** | Benchmarking & Validation | - Validate the agent's learning by introducing artificial network latency. |
+| **16** | Benchmarking & Validation | - Perform final analysis of all results and complete the dissertation report. |
+
+---
 
 ## 4. System Architecture Overview
 
@@ -705,7 +719,7 @@ public ServiceInfo geNextServiceInstance(String serviceName) {
 private long getActiveConnections(ServiceInfo instance) {
     return activeConnections.computeIfAbsent(instance.getUrl(), k -> new AtomicLong(0)).get();
 }
-
+```
 ### 5.3 RL-Agent Based Load Balancing
 
 The primary AI-driven algorithm communicates with the Python-based RL-Agent via a REST API to get its routing decisions.
@@ -991,62 +1005,321 @@ While this project has successfully demonstrated the core value proposition, the
 
 ---
 
-## 9. Appendices
+## 9. Appendix
 
-### Appendix A: Q-Learning Hyperparameter Configuration
+### Appendix A: The Q-Learning Algorithm in Depth
 
-The following table details the final hyperparameters used for the Q-learning agent, defined in `rl_agent/config/rl_settings.py`.
+Q-learning is a model-free reinforcement learning algorithm used to find the optimal action-selection policy for any given finite Markov Decision Process. It works by learning a quality function, known as the Q-function, which estimates the value of taking a certain action in a given state.
 
-| Parameter | Description | Value |
-| :--- | :--- | :--- |
-| `learning_rate` | (Alpha) Controls how quickly the agent learns from new information. | `0.3` |
-| `discount_factor` | (Gamma) Determines the importance of future rewards. | `0.95` |
-| `epsilon_start` | The initial probability of choosing a random action (exploration). | `0.25` |
-| `epsilon_min` | The minimum exploration rate the agent will decay to. | `0.01` |
-| `epsilon_decay` | The rate at which the exploration probability decreases. | `0.99` |
-| `production_epsilon`| A fixed, low exploration rate for production mode. | `0.02` |
+#### Mathematical Formulation
 
-### Appendix B: Reward Function Weights
+The core of Q-learning is the Bellman equation, which is updated iteratively. The Q-value for a state-action pair `(s, a)` is updated based on the reward received and the maximum expected future reward from the next state `s'`.
 
-These weights, defined in `rl_agent/config/rl_settings.py`, determine the relative importance of each objective in the reward calculation.
+The update rule is as follows:
 
-| Parameter | Description | Value |
-| :--- | :--- | :--- |
-| `latency_weight` | Importance of minimizing response time. | `0.35` |
-| `error_rate_weight`| Importance of minimizing errors. | `0.35` |
-| `throughput_weight`| Importance of maximizing request throughput. | `0.15` |
-| `utilization_balance_weight` | Importance of balancing load across pods. | `0.10` |
-| `stability_weight` | Importance of maintaining stable performance. | `0.05` |
+```
+Q(s, a) ← (1 - α) * Q(s, a) + α * [r + γ * max_{a'} Q(s', a')]
+```
 
-### Appendix C: Load Balancer Routing Logic (Java)
+Where:
+*   `Q(s, a)` is the current Q-value of taking action `a` in state `s`.
+*   `α` (alpha) is the **learning rate** (0 < α ≤ 1), which determines how much the new information overrides the old information.
+*   `r` is the **reward** received after taking action `a` in state `s`.
+*   `γ` (gamma) is the **discount factor** (0 ≤ γ < 1), which determines the importance of future rewards.
+*   `s'` is the **next state** resulting from action `a`.
+*   `max_{a'} Q(s', a')` is the maximum Q-value for all possible actions `a'` in the next state `s'`, representing the best possible future value.
 
-This snippet from `LoadBalancerController.java` shows the core logic for selecting a backend instance based on the chosen routing strategy.
+#### A Numerical Walkthrough Example
 
-```java
-private String getTargetInstance(String serviceName) {
-    RoutingStrategy strategy = routingStrategyFactory.getStrategy(currentAlgorithm);
-    List<String> instances = serviceRegistry.getInstances(serviceName);
-    
-    if (instances.isEmpty()) {
-        throw new IllegalStateException("No instances available for service: " + serviceName);
-    }
-    
-    return strategy.chooseInstance(instances, serviceName);
+Let's consider a simplified scenario with two backend pods, `pod-1` (action `a1`) and `pod-2` (action `a2`).
+
+**Initial State:**
+*   **State (`s1`)**: `(cpu_low, mem_low, latency_ok)`
+*   **Initial Q-table (for state `s1`)**: `Q(s1, a1) = 0`, `Q(s1, a2) = 0`
+*   **Hyperparameters**: `α = 0.1`, `γ = 0.9`
+
+**Step 1: Agent selects an action.**
+*   The agent chooses to send a request to `pod-1` (action `a1`).
+
+**Step 2: The environment returns a reward and a new state.**
+*   The request to `pod-1` completes with a response time of 50ms and is successful.
+*   **Reward (`r`)**: The reward function calculates a reward of `+0.8`.
+*   **Next State (`s2`)**: The system transitions to a new state, `(cpu_low, mem_medium, latency_ok)`.
+
+**Step 3: Agent observes the maximum Q-value for the next state.**
+*   Let's assume the Q-table for the new state `s2` currently has the values: `Q(s2, a1) = 0.5` and `Q(s2, a2) = 0.7`.
+*   The maximum future reward is `max Q(s2, a') = 0.7`.
+
+**Step 4: The agent updates the Q-value for the original state-action pair (`s1`, `a1`).**
+*   Using the Bellman equation:
+    `Q(s1, a1) ← (1 - 0.1) * 0 + 0.1 * [0.8 + 0.9 * 0.7]`
+    `Q(s1, a1) ← 0.9 * 0 + 0.1 * [0.8 + 0.63]`
+    `Q(s1, a1) ← 0 + 0.1 * 1.43`
+    `Q(s1, a1) ← 0.143`
+
+**Result:**
+*   The updated Q-table for state `s1` is now: `Q(s1, a1) = 0.143`, `Q(s1, a2) = 0`.
+*   The agent has learned that taking action `a1` in state `s1` is slightly positive. Over thousands of such iterations, the Q-values converge to represent the true long-term value of each action in each state.
+
+### Appendix B: Reinforcement Learning Model Details
+
+This section provides a deeper look into the core components of the RL model that translate raw system metrics into intelligent routing decisions.
+
+#### State Space Encoding
+
+The agent cannot interpret raw, continuous metrics directly. The state encoder's job is to convert the high-dimensional, continuous data from Prometheus into a discrete, simplified state tuple that the Q-table can use as a key.
+
+**Binning Strategy:**
+
+The system uses a binning strategy to discretize each metric. For example, CPU usage is mapped to one of several bins:
+
+*   `0-25%` -> `0` (low)
+*   `25-50%` -> `1` (medium)
+*   `50-75%` -> `2` (high)
+*   `75-100%` -> `3` (critical)
+
+**A Real-World Example:**
+
+Consider a `cart-service` pod with the following real-time metrics collected from Prometheus:
+
+*   **CPU Usage**: 65%
+*   **Memory Usage**: 45%
+*   **P95 Latency**: 150ms
+*   **Error Rate**: 2%
+*   **Request Rate**: 30 req/s
+
+The state encoder would process these as follows:
+
+1.  **CPU (65%)** -> falls into the `50-75%` bin -> **`2`**
+2.  **Memory (45%)** -> falls into the `25-50%` bin -> **`1`**
+3.  **Latency (150ms)** -> falls into a `100-200ms` bin -> **`2`**
+4.  **Error Rate (2%)** -> falls into a `1-5%` bin -> **`1`**
+5.  **Request Rate (30 req/s)** -> falls into a `20-40 req/s` bin -> **`2`**
+
+The final discrete state representation for this pod would be the tuple: **`(2, 1, 2, 1, 2)`**. This tuple is used as a key to look up Q-values in the Q-table.
+
+#### Reward Function Calculation
+
+The reward function is a multi-objective formula designed to provide a balanced signal to the agent, encouraging it to optimize for several competing goals simultaneously. The total reward is a weighted sum of normalized scores for latency, errors, throughput, and load balance.
+
+**A Numerical Example:**
+
+Consider a request that was routed to a pod, and the following outcome was observed:
+
+*   **Response Time**: 120ms
+*   **Outcome**: Success (HTTP 200)
+*   **System Throughput**: 80 req/s
+
+Assume the following weights are set in the configuration:
+*   `latency_weight`: 0.4
+*   `error_weight`: 0.4
+*   `throughput_weight`: 0.1
+*   `balance_weight`: 0.1
+
+1.  **Latency Score**: Lower latency is better. A normalized score might be `+0.6`.
+2.  **Error Score**: No error occurred. This yields the maximum score of `+1.0`.
+3.  **Throughput Score**: Higher throughput is better. A normalized score might be `+0.7`.
+4.  **Balance Score**: Measures if the pods are evenly loaded. Let's assume it's `+0.5`.
+
+**Final Reward Calculation:**
+`Total Reward = (0.6 * 0.4) + (1.0 * 0.4) + (0.7 * 0.1) + (0.5 * 0.1)`
+`Total Reward = 0.24 + 0.40 + 0.07 + 0.05`
+`Total Reward = 0.76`
+
+This positive reward of `0.76` is then used in the Bellman equation to update the Q-value for the state-action pair that led to this outcome.
+
+#### Markov Decision Process (MDP) Formulation
+
+The entire load balancing problem can be formally defined as a Markov Decision Process, which provides the theoretical foundation for applying reinforcement learning.
+
+*   **States (S)**: The set of all possible discrete system states. A state `s ∈ S` is a tuple representing the binned metrics of all service pods (e.g., `(cpu_bin, mem_bin, ...)` for each pod).
+
+*   **Actions (A)**: The set of all possible actions the agent can take. An action `a ∈ A` corresponds to selecting a specific backend pod to which the incoming request will be routed (e.g., `cart-service-pod-1`).
+
+*   **Reward Function (R)**: A function `R(s, a, s')` that defines the immediate reward received after taking action `a` in state `s` and transitioning to state `s'`. This is calculated by our multi-objective reward function based on the outcome of the request.
+
+*   **Transition Function (P)**: The probability `P(s' | s, a)` of transitioning to state `s'` after taking action `a` in state `s`. In this project, the transition function is unknown and not explicitly modeled (making this a model-free problem), as the next state of the system depends on complex, external factors like user traffic patterns.
+
+*   **Policy (π)**: The agent's strategy for choosing actions in given states. The goal of the Q-learning algorithm is to find the optimal policy, `π*`, which maximizes the cumulative discounted reward over time.
+
+### Appendix C: System Configuration
+
+This section provides insight into the key configuration files that govern the behavior of the RL-Agent and the load testing framework.
+
+#### RL-Agent Tunable Parameters (`rl_settings.py`)
+
+The RL-Agent's learning behavior is controlled by a set of hyperparameters defined in `rl_settings.py`. These parameters allow for fine-tuning the agent's performance to suit different operational environments. The most critical tunable parameters are listed below.
+
+| Parameter | Section | Default Value | Description |
+| :--- | :--- | :--- | :--- |
+| `learning_rate` | Q-Learning | `0.3` | Determines how quickly the agent adopts new information. Higher values mean faster learning. |
+| `discount_factor` | Q-Learning | `0.95` | Controls the importance of future rewards. A higher value makes the agent more farsighted. |
+| `epsilon_start` | Q-Learning | `0.25` | The initial probability that the agent will explore a random action versus exploiting the best-known one. |
+| `epsilon_decay` | Q-Learning | `0.99` | The rate at which the exploration probability (`epsilon`) decreases over time as the agent learns. |
+| `production_epsilon`| Q-Learning | `0.02` | A very low, fixed exploration rate used during benchmarking or in production to prioritize exploitation. |
+| `cpu_bins` | State Encoding | `16` | The number of discrete bins to divide CPU utilization into for state representation. |
+| `latency_bins` | State Encoding | `20` | The number of discrete bins for P95 latency, affecting state granularity. |
+| `latency_weight` | Reward | `0.35` | The relative importance (35%) of minimizing latency in the final reward calculation. |
+| `error_rate_weight`| Reward | `0.35` | The relative importance (35%) of minimizing errors. |
+| `throughput_weight`| Reward | `0.15` | The relative importance (15%) of maximizing overall system throughput. |
+
+#### Sample Load Testing Scenario
+
+The load testing framework uses detailed JSON configurations to generate realistic and diverse traffic patterns. This is essential for training a robust RL model that can handle real-world conditions. Below is an excerpt from `comprehensive_rl_training_config.json`, showing a single traffic pattern.
+
+```json
+{
+  "name": "morning_peak_rush",
+  "start_minute": 0,
+  "duration_minutes": 25,
+  "intensity": "very_high",
+  "concurrent_users": 95,
+  "user_behavior_distribution": {
+    "quick_browsers": 0.4,
+    "careful_shoppers": 0.25,
+    "bulk_buyers": 0.15,
+    "impulse_buyers": 0.2
+  },
+  "scenario_weights": {
+    "browse_weight": 50,
+    "search_weight": 20,
+    "cart_weight": 20,
+    "order_weight": 8,
+    "profile_weight": 2
+  }
 }
 ```
 
-### Appendix D: State Encoding Bins
+**Explanation of Key Fields:**
+*   **`name`**: A descriptive name for the traffic pattern.
+*   **`duration_minutes`**: How long this specific pattern lasts.
+*   **`concurrent_users`**: The number of virtual users active during this phase.
+*   **`user_behavior_distribution`**: Defines the mix of user profiles (e.g., some users browse quickly, others shop carefully), each with different session lengths and action probabilities.
+*   **`scenario_weights`**: Controls the probability of a user performing a specific action (e.g., browsing vs. adding to cart), thereby shaping the load on different microservices.
 
-The `StateEncoder` configuration, showing the number of discrete bins for each metric.
+### Appendix D: Technical Specifications
 
-| Parameter | Description | Value |
-| :--- | :--- | :--- |
-| `cpu_bins` | Number of bins for CPU usage. | `16` |
-| `memory_bins` | Number of bins for memory usage. | `16` |
-| `latency_bins` | Number of bins for response time. | `20` |
-| `error_rate_bins`| Number of bins for the error rate. | `12` |
-| `throughput_bins`| Number of bins for request throughput. | `16` |
+This section provides supplementary technical details, including a high-level analysis of algorithm complexity and the data contracts for the RL-Agent's API.
 
+#### Comparison of Load Balancing Algorithms
+
+The choice of a load balancing algorithm involves trade-offs between performance, resource usage, and intelligence. The table below provides a basic comparison of the computational complexity for the algorithms used in this project.
+
+| Algorithm | Time Complexity (Decision) | Space Complexity | Key Characteristic |
+| :--- | :--- | :--- | :--- |
+| **Round Robin** | `O(1)` | `O(N)` | Simple, stateless, and extremely fast. Does not adapt to server load. |
+| **Least Connections**| `O(1)` | `O(N)` | Requires tracking active connections but is still very fast. Adapts to basic load. |
+| **RL-Agent** | `O(M) + O(1)` | `O(S * A)` | Decision requires metric collection for `M` pods, but the lookup is constant time. Space usage depends on the size of the state-space `S` and action-space `A`, which can be large. |
+
+*   `N` = Total number of pods available to the load balancer.
+*   `M` = Number of pods for the specific service being requested.
+*   `S` = Total number of unique states in the Q-table.
+*   `A` = Total number of unique actions (pods) in the Q-table.
+
+#### RL-Agent API Payloads
+
+The load balancer and the RL-Agent communicate via a simple REST API. Below are sample JSON payloads for the two primary endpoints.
+
+**`/decide` Endpoint Request**
+
+This payload is sent from the load balancer to the RL-Agent to request a routing decision.
+
+```json
+{
+  "trace_id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+  "service_name": "cart-service"
+}
+```
+
+**`/decide` Endpoint Response**
+
+The RL-Agent responds with the name of the selected pod.
+
+```json
+{
+  "selected_pod": "cart-service-pod-7f8c9d0b1a-2b3c4"
+}
+```
+
+**`/feedback` Endpoint Request**
+
+After the request is completed, the load balancer sends the outcome back to the RL-Agent for learning.
+
+```json
+{
+  "trace_id": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+  "service_name": "cart-service",
+  "selected_pod": "cart-service-pod-7f8c9d0b1a-2b3c4",
+  "response_time_ms": 85,
+  "status_code": 200,
+  "is_error": false
+}
+```
+
+### Appendix E: Environment Setup Guide
+
+This guide outlines the necessary tools, technologies, and dependencies required to build, deploy, and test the AI Load Balancer project. It is intended for developers who wish to replicate the research environment.
+
+#### Core Technologies
+*   **Java**: Version 17 or higher (for all microservices).
+*   **Maven**: Version 3.8 or higher (for building the Java projects).
+*   **Python**: Version 3.10 or higher (for the RL-Agent and load testing framework).
+*   **Docker**: Latest stable version (for containerizing all applications).
+*   **Kubernetes**: A local cluster is required. The project was developed and tested using **`kind`** (Kubernetes in Docker).
+*   **`kubectl`**: The Kubernetes command-line tool for interacting with the cluster.
+
+#### Infrastructure Services
+
+The following services are required and are typically run as containers within the Kubernetes cluster:
+
+*   **PostgreSQL**: For primary data persistence.
+*   **Redis**: For caching and session management.
+*   **Apache Kafka**: For the asynchronous messaging queue.
+*   **Prometheus**: For metrics collection.
+*   **Grafana**: For data visualization and dashboards.
+
+#### Python RL-Agent Dependencies
+
+The Python environment for the RL-Agent has several key dependencies. These can be installed from the `rl_agent/requirements.txt` file using `pip`:
+
+```bash
+# From the rl_agent directory
+pip install -r requirements.txt
+```
+
+**Key Python Libraries:**
+*   **`fastapi`**: For creating the agent's high-performance REST API.
+*   **`uvicorn`**: For serving the FastAPI application.
+*   **`numpy` & `scikit-learn`**: For numerical operations and machine learning utilities (e.g., state binning).
+*   **`prometheus-api-client`**: For querying metrics from the Prometheus server.
+*   **`pydantic`**: For data validation and settings management.
+*   **`locust`**: (In the `load-testing` directory) For running the load tests.
+
+### Appendix F: Glossary
+
+*   **Action**: In the context of this project, a decision made by the RL-Agent to route an incoming request to a specific backend pod.
+
+*   **Discount Factor (Gamma / γ)**: A hyperparameter in Q-learning, between 0 and 1, that determines the importance of future rewards. A higher value makes the agent prioritize long-term gains.
+
+*   **Epsilon-Greedy**: An exploration strategy where the agent chooses a random action with a probability of epsilon (ε) and the best-known action with a probability of 1-ε. This balances exploration of new strategies with exploitation of known good ones.
+
+*   **Learning Rate (Alpha / α)**: A hyperparameter that controls how much new information overrides old information. It determines how quickly the agent adapts its Q-values.
+
+*   **Markov Decision Process (MDP)**: A mathematical framework for modeling decision-making problems. It is defined by a set of states, actions, a transition model, and a reward function.
+
+*   **P95 / P99 Latency**: Statistical measures representing the 95th and 99th percentile of response times. P95 latency means that 95% of requests were completed in that time or less. These are used to measure tail latency, which is critical for user experience.
+
+*   **Q-Learning**: A model-free reinforcement learning algorithm that learns a policy indicating the best action to take in any given state. It does this by learning a Q-value for each state-action pair.
+
+*   **Q-Value**: A value that represents the quality of a state-action pair. It is the expected cumulative future reward an agent will receive by taking a specific action in a specific state and following the optimal policy thereafter.
+
+*   **Reward**: A numerical signal that the environment sends to the agent in response to an action. The agent's goal is to maximize the cumulative reward over time.
+
+*   **Sidecar Pattern**: A deployment pattern in which a secondary container is deployed alongside a primary application container. In this project, the RL-Agent runs as a sidecar to the AI Load Balancer to minimize communication latency.
+
+*   **State**: A discrete representation of the system's condition at a specific point in time, derived from a set of continuous metrics (e.g., CPU, memory, latency).
+
+*   **Throughput**: A measure of the system's performance, typically quantified as the number of requests processed per unit of time (e.g., requests per second).
 ---
 
 ## 10. Glossary
