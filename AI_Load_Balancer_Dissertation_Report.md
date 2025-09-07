@@ -727,25 +727,57 @@ The primary AI-driven algorithm communicates with the Python-based RL-Agent via 
 *   **Decision and Fallback**: The implementation requests a decision from the RL-Agent. If the agent fails to respond or returns an invalid instance, the system gracefully falls back to the Round Robin algorithm to ensure high availability.
 
 ```java
-// In RLBasedLoadbalancer.java (Simplified)
+// In RLApiLoadBalancer.java
 
+@Override
 public ServiceInfo geNextServiceInstance(String serviceName) {
-    try {
-        // 1. Make an API call to the RL-Agent to get the best pod name
-        String targetPodName = rlDecisionClient.getDecision(serviceName);
-
-        // 2. Validate that the chosen pod is healthy and available
-        ServiceInfo targetService = findHealthyServiceByPodName(serviceName, targetPodName);
-        
-        if (targetService != null) {
-            return targetService; // Return the AI's choice
-        }
-    } catch (Exception e) {
-        logger.warn("RL decision failed, falling back...");
+    totalDecisions++;
+    
+    // 1. Check if the RL Agent API is healthy, otherwise use fallback
+    if (!rlApiHealthy) {
+        logger.debug("RL API unhealthy, using fallback for service: {}", serviceName);
+        loadBalancerMetrics.recordRLFallback(serviceName, "rl_api_unhealthy");
+        return useFallback(serviceName);
     }
     
-    // 3. If anything fails, use the fallback algorithm
-    return fallbackLoadbalancer.geNextServiceInstance(serviceName);
+    Timer.Sample rlDecisionSample = loadBalancerMetrics.startRLDecision();
+    
+    try {
+        // 2. Request a routing decision from the RL-Agent
+        RLDecisionClient.RoutingDecision decision = rlDecisionClient
+                .getRoutingDecision(serviceName, null)
+                .timeout(Duration.ofMillis(2000)) // Set a timeout
+                .block();
+        
+        if (decision != null && decision.selectedPod != null) {
+            // 3. Confidence Check: Fallback if confidence is too low
+            if (decision.confidence < CONFIDENCE_THRESHOLD) {
+                logger.info("Low confidence RL decision ({:.2f}), using fallback", decision.confidence);
+                loadBalancerMetrics.recordRLFallback(serviceName, "low_confidence");
+                return useFallback(serviceName);
+            }
+            
+            // 4. Validate that the agent's chosen pod is available and healthy
+            ServiceInfo selectedService = findServiceByPodName(serviceName, decision.selectedPod);
+            
+            if (selectedService != null) {
+                rlDecisions++;
+                loadBalancerMetrics.recordRLDecision(rlDecisionSample, serviceName, 
+                        decision.decisionType, decision.confidence);
+                logger.info("High confidence RL decision ({:.2f}): {}", decision.confidence, decision.selectedPod);
+                return selectedService; // Success: Use the AI's choice
+            } else {
+                logger.warn("RL selected pod {} not found for service {}", decision.selectedPod, serviceName);
+                loadBalancerMetrics.recordRLFallback(serviceName, "selected_pod_not_found");
+            }
+        }
+    } catch (Exception e) {
+        logger.warn("RL decision failed for service {}: {}", serviceName, e.getMessage());
+        loadBalancerMetrics.recordRLFallback(serviceName, "rl_decision_exception");
+    }
+    
+    // 5. If any step fails, use the fallback algorithm for resilience
+    return useFallback(serviceName);
 }
 ```
 
