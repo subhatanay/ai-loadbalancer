@@ -654,7 +654,6 @@ public class RoutingStrategyAlgorithm {
         return switch (routingStrategy) {
             case "least-connections" -> leastConnectionsLoadBalancer;
             case "rl-agent" -> rlApiLoadBalancer; // The primary AI-based algorithm
-            case "rl-static" -> rlBasedLoadbalancer; // A version with a static, pre-loaded model
             default -> roundRobinLoadBalancer; // Default to Round Robin
         };
     }
@@ -987,37 +986,45 @@ The benchmark results demonstrate that the AI-Powered Load Balancer successfully
 
 ---
 
-## 7. Conclusions and Recommendations
+## 7. Conclusions, Limitations, and Future Work
 
-This final chapter summarizes the key conclusions drawn from the project and provides recommendations for future work, outlining potential avenues for extending and enhancing the capabilities of the AI-Powered Load Balancer.
+This chapter summarizes the project's findings, acknowledges its limitations, and suggests directions for future research.
 
 ### 7.1 Conclusions
 
-This project successfully designed, implemented, and validated an adaptive load balancing system that leverages reinforcement learning to optimize traffic distribution in a complex microservices environment. The research and development process has led to several key conclusions:
+This project successfully built and tested an AI-powered load balancer that uses reinforcement learning. The key takeaways are:
 
-1.  **Reinforcement Learning is a Viable and Effective Solution for Dynamic Load Balancing**: The empirical results demonstrate that the RL-Agent, despite a modest increase in per-request latency, can achieve significantly higher system throughput and reliability compared to traditional algorithms. This confirms that an agent-based learning approach can capture the complex dynamics of a microservices environment and make more effective, holistic decisions.
+1.  **AI is a Better Approach for Modern Load Balancing**: The results clearly show that the RL-agent, while slightly slower per request, makes the entire system more efficient and reliable than traditional algorithms. It handles more traffic and produces fewer errors, which is a winning trade-off for complex systems.
 
-2.  **Multi-Objective Optimization is Crucial**: The success of the RL-Agent was heavily dependent on a well-designed, multi-objective reward function. Early iterations that over-weighted a single metric (e.g., error rate) led to poor learning. The final, normalized reward function that balances latency, errors, throughput, and stability was critical for achieving a robust and balanced performance profile.
+2.  **Balancing Goals is Key to Success**: The AI agent's success depends on a smart reward function. Focusing on just one metric, like speed, leads to poor decisions. A balanced function that considers latency, errors, and throughput together is essential for stable performance.
 
-3.  **The Trade-off Between Intelligence and Latency is Real but Manageable**: The project confirmed that introducing an intelligent decision-making layer adds computational overhead. However, it also demonstrated that this latency can be effectively managed. By co-locating the RL-Agent with the load balancer as a sidecar, network latency was eliminated, and while a computational delay remains, its negative impact is more than offset by the system-wide gains in throughput and error reduction.
+3.  **Offline Training is a Safe Starting Point**: Training the agent on pre-collected data first is a safe and effective way to build a baseline of knowledge before letting it make decisions in a live system.
 
-4.  **Offline Training is a Safe and Effective Strategy**: The offline training methodology proved to be a robust approach for bootstrapping the agent's knowledge base. It allowed for safe, rapid iteration on the model and its hyperparameters without any risk to a live system, providing a stable foundation of knowledge before the agent was deployed.
+In short, this work proves that using AI for load balancing is a practical and superior solution for the challenges of modern microservice architectures.
 
-In summary, this dissertation provides strong evidence that AI-powered, adaptive load balancing is not just a theoretical concept but a practical and superior alternative to the static, heuristic-based methods that are prevalent today.
+### 7.2 Limitations
 
-### 7.2 Recommendations and Future Work
+While promising, the current implementation has several limitations that should be acknowledged:
 
-While this project has successfully demonstrated the core value proposition, there are numerous avenues for future research and development that could further enhance the system's capabilities.
+1.  **Scalability of the Q-Table**: The project uses a simple table (a Q-table) to store what the agent learns. As we add more services or monitor more metrics, this table can grow exponentially large, becoming slow and memory-intensive. This is a well-known issue called the "curse of dimensionality."
 
-*   **Advanced RL Algorithms**: The current implementation uses tabular Q-learning, which is effective but can struggle with very large state spaces. Future work should explore more advanced, function-approximation-based algorithms like Deep Q-Networks (DQN) or Actor-Critic (A2C/PPO) models. These would allow the agent to handle a much larger and more continuous state space, potentially learning even more nuanced control policies.
+2.  **Rigid State Representation**: The system groups continuous metrics into fixed bins (e.g., CPU usage 0-25% is one state). This is simple but can miss important details. For example, a CPU jump from 74% to 76% looks like a major change (crossing a boundary), while a jump from 51% to 74% is ignored (within the same bin).
 
-*   **Predictive Autoscaling**: The insights generated by the RL-Agent could be used to drive a predictive autoscaling system. By recognizing patterns that typically lead to traffic surges, the agent could proactively scale up the required microservices *before* the load increases, further improving performance and reliability.
+3.  **The "Cold Start" Problem**: The agent is not effective until it has gathered enough experience. When faced with a completely new situation it hasn't seen in training, it may not make the best decision.
 
-*   **Automated Canary Deployments**: The agent's ability to sensitively detect performance degradation makes it an ideal candidate for automating canary analysis. A CI/CD pipeline could be integrated with the agent to automatically route a small percentage of traffic to a new service version, with the agent making the data-driven decision to promote or roll back the deployment based on its observed performance.
+4.  **Retraining for Architectural Changes**: If the application architecture changes, such as adding a new service, the agent's existing knowledge becomes outdated. The Q-table would need to be retrained or expanded to include the new server, which is a manual process.
 
-*   **Multi-Cluster and Multi-Cloud Routing**: The current architecture is confined to a single Kubernetes cluster. A future iteration could extend the agent's capabilities to manage traffic across multiple clusters or even different cloud providers, optimizing for a combination of latency, cost, and availability.
+### 7.3 Recommendations and Future Work
 
-*   **Security-Aware Load Balancing**: The agent's state representation could be enriched with security-related metrics (e.g., number of authentication failures, intrusion detection alerts). This would allow the agent to learn to route suspicious traffic to a honey-pot or a more heavily scrutinized instance, adding a layer of intelligent security to the system.
+Based on the project's success and limitations, the following steps are recommended for future work:
+
+*   **Upgrade to Deep Reinforcement Learning (DRL)**: Replace the Q-table with a neural network (like a Deep Q-Network or DQN). A DRL model can handle a much larger and more complex environment, solving the scalability problem and allowing for more nuanced decision-making.
+
+*   **Implement a Safety Circuit Breaker**: Add a safety mechanism that automatically switches back to the simple Round Robin algorithm if the AI agent starts making poor decisions that hurt performance. This is crucial for production readiness.
+
+*   **Develop Advanced Online Learning**: Improve the agent's ability to learn safely and quickly in a live environment. This would allow it to adapt to sudden changes without needing to be taken offline for retraining.
+
+*   **Integrate with Predictive Autoscaling**: Use the insights from the agent to predict future traffic spikes. This would allow the system to scale up its resources *before* they are needed, preventing slowdowns entirely.
 
 ---
 
