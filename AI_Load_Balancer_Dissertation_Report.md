@@ -5,46 +5,53 @@
 **Abstract**
 
 **1. Introduction**
-1.1 Background and Motivation
-1.2 Problem Statement
+*   1.1 Background and Motivation
+*   1.2 Problem Statement
 
 **2. Purpose and Expected Outcome**
-2.1 Literature Review
-2.2 Existing Process and Limitations
-2.3 Justification for Methodology
-2.4 Project Work Methodology
-2.5 Benefits Derivable from the Work
+*   2.1 Literature Review
+*   2.2 Existing Process and Limitations
+*   2.3 Justification for Methodology
+*   2.4 Project Work Methodology
+*   2.5 Benefits Derivable from the Work
 
 **3. Detailed Plan of Work**
 
 **4. System Architecture Overview**
-4.1 High-Level System Design
-4.2 Microservices Stack Architecture
-4.3 Reinforcement Learning Engine
-4.4 Monitoring and Observability Stack
-4.5 Deployment Architecture
-4.6 Load Testing Framework
-4.7 Offline Training Strategy
+*   4.1 High-Level System Design
+*   4.2 Microservices Stack Architecture
+*   4.3 Reinforcement Learning Engine
+*   4.4 Monitoring and Observability Stack
+*   4.5 Deployment Architecture
+*   4.6 Load Testing Framework
+*   4.7 Offline Training Strategy
 
 **5. Implementation Details**
+*   5.1 Load Balancer Routing Strategy
+*   5.2 Traditional Algorithms
+*   5.3 RL-Agent Based Load Balancing
+*   5.4 RL-Agent: Core Implementation
+*   5.5 Feedback Mechanism
 
-**6. Observed Performance Metrics**
-6.1 Performance Benchmarking Results
-6.2 Algorithm Comparison Analysis
+**6. Observed Performance and Results**
+*   6.1 System Environment and Training Setup
+*   6.2 Performance Benchmarking
+*   6.3 Real-Time Adaptiveness Scenario
 
-**7. Conclusions and Recommendations**
-7.1 Conclusions
-7.2 Recommendations and Future Work
+**7. Conclusions, Limitations, and Future Work**
+*   7.1 Conclusions
+*   7.2 Limitations
+*   7.3 Recommendations and Future Work
 
 **8. References**
 
 **9. Appendices**
-A. Q-Learning Algorithm Implementation
-B. Load Balancer Routing Logic
-C. Hyperparameter Tuning Configuration
-D. State Encoding and Action Selection
-
-**10. Glossary**
+*   Appendix A: Q-Learning Algorithm Explained
+*   Appendix B: RL Model and System Details
+*   Appendix C: System Configuration and Samples
+*   Appendix D: Technical Specifications
+*   Appendix E: Environment Setup and Execution Guide
+*   Appendix F: Glossary
 
 ---
 
