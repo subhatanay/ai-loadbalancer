@@ -787,17 +787,36 @@ public ServiceInfo geNextServiceInstance(String serviceName) {
 The `StateEncoder` converts continuous metrics (like 42.5% CPU) into discrete bins (like bin `1` for 25-50% CPU) that the agent can learn from.
 
 ```python
-# In StateEncoder class
+# In rl_agent/cpu/state_encoder.py
 
 def _fast_encode_state(self, metrics_dict: Dict[str, float]) -> Tuple[int, ...]:
+    """Fast state encoding for production use without discretizers."""
     encoded = []
     
-    # CPU usage (0-4 bins)
+    # CPU usage (0-4 bins, 25% increments)
     cpu = metrics_dict.get('cpu_usage_percent', 0)
-    cpu_bin = min(4, int(cpu / 25)) # Divides CPU % by 25 to get bin index
+    cpu_bin = min(4, int(cpu / 25)) if cpu is not None else 0
     encoded.append(cpu_bin)
     
-    # ... (similar logic for memory, latency, etc.)
+    # Memory usage (0-4 bins, 25% increments)
+    memory = metrics_dict.get('jvm_memory_usage_percent', 0)
+    memory_bin = min(4, int(memory / 25)) if memory is not None else 0
+    encoded.append(memory_bin)
+    
+    # Response time (0-4 bins, 100ms increments)
+    rt = metrics_dict.get('avg_response_time_ms', 0)
+    rt_bin = min(4, int(rt / 100)) if rt is not None else 0
+    encoded.append(rt_bin)
+    
+    # Error rate (0-2 bins, 5% increments)
+    error = metrics_dict.get('error_rate_percent', 0)
+    error_bin = min(2, int(error / 5)) if error is not None else 0
+    encoded.append(error_bin)
+    
+    # Request rate (0-4 bins, 50 rps increments)
+    rps = metrics_dict.get('request_rate_per_second', 0)
+    rps_bin = min(4, int(rps / 50)) if rps is not None else 0
+    encoded.append(rps_bin)
     
     return tuple(encoded)
 ```
@@ -806,17 +825,29 @@ def _fast_encode_state(self, metrics_dict: Dict[str, float]) -> Tuple[int, ...]:
 The `ActionSelector` implements the core exploration vs. exploitation logic. With probability `epsilon`, it explores a random action; otherwise, it exploits the best-known action.
 
 ```python
-# In ActionSelector class
+# In rl_agent/cpu/action_selector.py
 
-def select_action(self, state_key, q_table, available_actions, epsilon):
+def select_action(self, state_key, q_table, available_actions, epsilon, current_metrics):
     if random.random() < epsilon:
-        # Exploration: Choose a random, safe action
-        action = self._exploration_strategy(available_actions)
+        # Exploration: Choose a safe, lesser-known action
+        action = self._exploration_strategy(available_actions, q_table, current_metrics)
     else:
-        # Exploitation: Choose the best-known action from the Q-table
+        # Exploitation: Choose the best-known action
         action = self._exploitation_strategy(state_key, q_table, available_actions)
-    
     return action
+
+def _is_safe_to_explore(self, action: str, current_metrics: List) -> bool:
+    """Prevents exploration of critically overloaded pods."""
+    if not current_metrics: return True
+
+    for metric in current_metrics:
+        if metric.instance_id == action:
+            # Do not explore if CPU or Memory is over 95%
+            if getattr(metric, 'cpu_usage_percent', 0) > 95:
+                return False
+            if getattr(metric, 'jvm_memory_usage_percent', 0) > 95:
+                return False
+    return True
 ```
 
 #### 5.4.3 QLearningAgent: The Bellman Equation
@@ -826,16 +857,18 @@ The core learning happens in the `_update_q_value` method, which is a direct imp
 # In QLearningAgent class
 
 def _update_q_value(self, state, action, reward, next_state):
-    # Get the current Q-value (what we thought would happen)
+    """Core Q-learning update using the Bellman equation."""
+    # Get the current Q-value for the state-action pair
     current_q = self.q_table.get((state, action), 0.0)
 
-    # Find the best possible Q-value for the next state
-    max_next_q = max([self.q_table.get((next_state, a), 0.0) for a in actions])
+    # Find the maximum Q-value for the next state (the agent's best future prospect)
+    next_q_values = [self.q_table.get((next_state, a), 0.0) for a in self._get_possible_actions_for_state(next_state)]
+    max_next_q = max(next_q_values) if next_q_values else 0.0
 
-    # Bellman equation: Calculate the new Q-value based on the actual reward
-    # and the potential future reward.
-    new_q = current_q + self.config.learning_rate * \
-            (reward + self.config.discount_factor * max_next_q - current_q)
+    # Bellman equation: Q(s,a) <- Q(s,a) + α * [R + γ * max(Q(s',a')) - Q(s,a)]
+    td_target = reward + self.config.discount_factor * max_next_q
+    td_error = td_target - current_q
+    new_q = current_q + self.config.learning_rate * td_error
 
     # Update the Q-table with the new, more accurate value
     self.q_table[(state, action)] = new_q
@@ -845,22 +878,45 @@ def _update_q_value(self, state, action, reward, next_state):
 The `RewardCalculator` combines multiple performance objectives into a single reward signal. It normalizes each component and then combines them using a weighted sum.
 
 ```python
-# In RewardCalculator class
+# In rl_agent/cpu/reward_calculator.py
 
 def _calculate_normalized_reward(self, reward_components: Dict[str, float]) -> float:
-    # 1. Normalize each component (e.g., latency, error) to a [-1, 1] range
-    normalized_components = {k: np.tanh(v) for k, v in reward_components.items()}
+    # Step 1: Normalize each component to the [-1, 1] range
+    normalized_components = {}
+    for component, raw_value in reward_components.items():
+        if raw_value is None:
+            normalized_components[component] = 0.0
+            continue
 
-    # 2. Get weights from config (e.g., latency_weight = 0.35)
-    weights = self.config.weights
-    
-    # 3. Normalize weights to ensure they sum to 1.0
-    total_weight = sum(weights.values())
-    normalized_weights = {k: v / total_weight for k, v in weights.items()}
-    
-    # 4. Calculate the final weighted reward
-    total_reward = sum(normalized_weights[c] * normalized_components[c] for c in components)
-    
+        # Apply tanh normalization. For metrics where lower is better (latency, error_rate),
+        # the raw value is negated before applying tanh.
+        if component in ['latency', 'error_rate']:
+            normalized_components[component] = np.tanh(-raw_value)
+        else: # Higher is better (throughput, load_balance, stability)
+            normalized_components[component] = np.tanh(raw_value)
+
+    # Step 2: Get and normalize weights to sum to 1.0
+    weights = {
+        'latency': self.config.latency_weight,
+        'error_rate': self.config.error_rate_weight,
+        'throughput': self.config.throughput_weight,
+        'load_balance': self.config.utilization_balance_weight,
+        'stability': self.config.stability_weight
+    }
+    total_weight = sum(abs(w) for w in weights.values())
+    if total_weight == 0:
+        # Fallback to equal weights if all are zero
+        num_weights = len(weights)
+        normalized_weights = {k: 1.0 / num_weights for k in weights}
+    else:
+        normalized_weights = {k: abs(v) / total_weight for k, v in weights.items()}
+
+    # Step 3: Calculate the final weighted reward
+    total_reward = sum(
+        normalized_weights.get(component, 0) * normalized_components.get(component, 0)
+        for component in normalized_weights
+    )
+
     return total_reward
 ```
 
