@@ -1450,6 +1450,93 @@ cd load-testing
 # Run the benchmark using a specific configuration
 python3 automated_benchmark.py  --duration 15 --users 20 --ramp-up 5 --url http://localhost:8080
 ```
+### Appendix E: Load Balancer Routing API Implementation
+
+This appendix details the core `/proxy/{service}/**` API implementation from `LoadBalancerController.java`, which handles all incoming requests and routes them through the AI-powered load balancing system.
+
+#### E.1 Main Routing Endpoint
+
+The primary routing endpoint accepts all HTTP methods and forwards requests to the appropriate backend service instances:
+
+```java
+@RequestMapping(value = "/{serviceName}/**", method = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE})
+public ResponseEntity<?> proxyRequest(
+        @PathVariable("serviceName") String serviceName,
+        HttpServletRequest request,
+        @RequestBody(required = false) Object body) {
+    
+    // Handle trace ID for request tracking
+    String traceId = TraceUtils.getOrGenerateTraceId(request.getHeader(TraceUtils.TRACE_ID_HEADER));
+    TraceUtils.setTraceId(traceId);
+    
+    logger.info("Proxying request to service: {} [traceId={}]", serviceName, traceId); 
+    ServiceInfo targetInstance = null;
+    
+    try {
+        // Get next healthy instance using the configured routing strategy
+        long startTime = System.currentTimeMillis();
+        targetInstance = routingStrategyAlgorithm.getLoadbalancer().geNextServiceInstance(serviceName);
+         
+        if (targetInstance == null) {
+            Map<String, String> error = new HashMap<>();
+            error.put("error", "No healthy instances available for service: " + serviceName);
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);
+        }
+        
+        // Set chosen instance for RL experience logging
+        request.setAttribute("chosenPodInstance", targetInstance.getInstanceName());
+        logger.debug("Selected instance {} for service {}", targetInstance.getInstanceName(), serviceName);
+        
+         // Build target URI and forward request
+        URI targetUri = buildTargetUri(request, serviceName, targetInstance);
+        HttpHeaders headers = copyHeaders(request);
+        headers.set(TraceUtils.TRACE_ID_HEADER, traceId);
+        
+        HttpEntity<Object> entity = new HttpEntity<>(body, headers);
+        HttpMethod method = HttpMethod.valueOf(request.getMethod());
+        
+        // Forward the request
+        long forwardStartTime = System.currentTimeMillis();
+        ResponseEntity<String> response = restTemplate.exchange(targetUri, method, entity, String.class);
+        long forwardEndTime = System.currentTimeMillis();
+        
+        long responseTime = System.currentTimeMillis() - startTime;
+        
+        provideFeedbackToRLAgent(serviceName, targetInstance.getInstanceName(), 
+                             responseTime, response.getStatusCode().value());
+        
+        // Return response with proper headers
+        Object responseBody = parseResponseBody(response.getBody());
+        HttpHeaders responseHeaders = new HttpHeaders();
+        responseHeaders.putAll(response.getHeaders());
+        responseHeaders.set(TraceUtils.TRACE_ID_HEADER, traceId);
+        
+        return ResponseEntity.status(response.getStatusCode())
+                .headers(responseHeaders)
+                .body(responseBody);
+
+    } catch (Exception e) {
+        // Handle errors and provide negative feedback to RL agent
+        long responseTime = System.currentTimeMillis() - startTime;
+        logger.error("Error forwarding request: {}", e.getMessage(), e);
+        
+        if (targetInstance != null) {
+            provideFeedbackToRLAgent(serviceName, targetInstance.getInstanceName(), 
+                                   responseTime, 502);
+        }
+        
+        Map<String, String> error = new HashMap<>();
+        error.put("error", "Failed to forward request: " + e.getMessage());
+        
+        HttpHeaders errorHeaders = new HttpHeaders();
+        errorHeaders.set(TraceUtils.TRACE_ID_HEADER, traceId);
+        
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .headers(errorHeaders)
+                .body(error);
+    }
+}
+```
 
 ### Appendix F: Glossary
 
