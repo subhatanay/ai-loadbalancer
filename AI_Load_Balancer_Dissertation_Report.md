@@ -1465,11 +1465,6 @@ public ResponseEntity<?> proxyRequest(
         HttpServletRequest request,
         @RequestBody(required = false) Object body) {
     
-    // Handle trace ID for request tracking
-    String traceId = TraceUtils.getOrGenerateTraceId(request.getHeader(TraceUtils.TRACE_ID_HEADER));
-    TraceUtils.setTraceId(traceId);
-    
-    logger.info("Proxying request to service: {} [traceId={}]", serviceName, traceId); 
     ServiceInfo targetInstance = null;
     
     try {
@@ -1509,7 +1504,6 @@ public ResponseEntity<?> proxyRequest(
         Object responseBody = parseResponseBody(response.getBody());
         HttpHeaders responseHeaders = new HttpHeaders();
         responseHeaders.putAll(response.getHeaders());
-        responseHeaders.set(TraceUtils.TRACE_ID_HEADER, traceId);
         
         return ResponseEntity.status(response.getStatusCode())
                 .headers(responseHeaders)
@@ -1519,16 +1513,7 @@ public ResponseEntity<?> proxyRequest(
         // Handle errors and provide negative feedback to RL agent
         long responseTime = System.currentTimeMillis() - startTime;
         logger.error("Error forwarding request: {}", e.getMessage(), e);
-        
-        if (targetInstance != null) {
-            provideFeedbackToRLAgent(serviceName, targetInstance.getInstanceName(), 
-                                   responseTime, 502);
-        }
-        
-        Map<String, String> error = new HashMap<>();
-        error.put("error", "Failed to forward request: " + e.getMessage());
-        
-        HttpHeaders errorHeaders = new HttpHeaders();
+
         errorHeaders.set(TraceUtils.TRACE_ID_HEADER, traceId);
         
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
